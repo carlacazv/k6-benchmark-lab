@@ -14,7 +14,7 @@ const prometheus = parsePrometheusMatrix({ status: 'success', data: { resultType
 if (prometheus[0].value !== 5 || prometheus[1].value !== 5) throw new Error('Prometheus matrix aggregation failed');
 const datadog = parseDatadogSeries({ status: 'ok', series: [{ pointlist: [[1000000, 3], [1060000, 4]] }, { pointlist: [[1000000, 2], [1060000, 1]] }] });
 if (datadog[0].value !== 5 || datadog[1].value !== 5) throw new Error('Datadog series aggregation failed');
-const lines = [JSON.stringify({ timestamp: '2026-08-01T00:00:01Z', operation: 'checkout' }), JSON.stringify({ timestamp: '2026-08-01T00:00:20Z', operation: 'checkout' }), JSON.stringify({ timestamp: '2026-08-01T00:00:30Z', operation: 'browse' })];
+const lines = [JSON.stringify({ timestamp: '2026-08-01T00:00:01Z', operation: 'checkout' }), JSON.stringify({ timestamp: '2026-08-01T00:00:20Z', operation: 'checkout' }), JSON.stringify({ timestamp: '2026-08-01T00:02:30Z', operation: 'browse' })];
 const aggregated = aggregateAccessLogLines(lines, { operationFilterField: 'operation', operationFilterValue: 'checkout' }, 60);
-if (aggregated.length !== 1 || Math.abs(aggregated[0].value - 2 / 60) > 1e-9) throw new Error('access-log aggregation failed');
+if (aggregated.length !== 3 || Math.abs(aggregated[0].value - 2 / 60) > 1e-9 || aggregated[1].value !== 0 || aggregated[2].value !== 0) throw new Error('access-log zero-bucket aggregation failed');
 console.log('telemetry discovery tests passed');
