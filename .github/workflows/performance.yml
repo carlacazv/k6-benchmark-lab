@@ -1,0 +1,94 @@
+name: performance-lab
+
+on:
+  pull_request:
+  push:
+    branches: [main, 'agent/**']
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: 'smoke|baseline|load|stress|spike|soak|breakpoint'
+        required: false
+        default: 'smoke'
+
+permissions:
+  contents: read
+
+jobs:
+  performance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TARGET_BASE_URL: http://127.0.0.1:3000
+      SCENARIO: ${{ github.event.inputs.scenario || 'smoke' }}
+      NFR_P95_MS: '500'
+      NFR_P99_MS: '1000'
+      ERROR_RATE_THRESHOLD: '0.01'
+      CHECK_RATE_THRESHOLD: '0.99'
+      APDEX_T_MS: '500'
+      APDEX_MIN: '0.85'
+      BASELINE_RPS: '5'
+      PEAK_RPS: '15'
+      LIMIT_RPS: '60'
+      PRE_ALLOCATED_VUS: '20'
+      MAX_VUS: '100'
+      SMOKE_ITERATIONS: '3'
+      BROWSER_ITERATIONS: '2'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install project toolchain with mise
+        uses: jdx/mise-action@v4
+      - name: Ensure k6 browser runtime
+        uses: grafana/setup-k6-action@v1
+        with:
+          k6-version: '2.2.0'
+          browser: true
+      - name: Verify analyzer
+        run: npm run test:analyzer
+      - name: Start controlled target
+        run: |
+          node lab-app/server.mjs > /tmp/lab.log 2>&1 &
+          echo $! > /tmp/lab.pid
+          for i in {1..30}; do curl -fsS http://127.0.0.1:3000/health && break; sleep 1; done
+          curl -fsS http://127.0.0.1:3000/__config
+      - name: REST performance
+        id: rest
+        continue-on-error: true
+        env: { K6_REPORT_DIR: artifacts/rest }
+        run: mkdir -p artifacts/rest && k6 run tests/rest/performance.js
+      - name: GraphQL performance
+        id: graphql
+        continue-on-error: true
+        env: { K6_REPORT_DIR: artifacts/graphql }
+        run: mkdir -p artifacts/graphql && k6 run tests/graphql/performance.js
+      - name: Frontend performance
+        id: browser
+        continue-on-error: true
+        env:
+          K6_REPORT_DIR: artifacts/browser
+          K6_BROWSER_HEADLESS: 'true'
+        run: mkdir -p artifacts/browser && k6 run tests/browser/performance.js
+      - name: Generate evidence-based diagnosis
+        id: diagnosis
+        if: always()
+        continue-on-error: true
+        run: node scripts/analyze-results.mjs artifacts artifacts/performance-diagnosis.md artifacts/performance-diagnosis.json
+      - name: Capture environment evidence
+        if: always()
+        run: |
+          mkdir -p artifacts/evidence
+          { echo '# Runner'; uname -a; echo; echo '# CPU'; lscpu; echo; echo '# Memory'; free -h; echo; echo '# Lab config'; curl -fsS http://127.0.0.1:3000/__config || true; echo; echo '# Lab metrics'; curl -fsS http://127.0.0.1:3000/metrics || true; echo; echo '# Lab stdout'; cat /tmp/lab.log || true; } > artifacts/evidence/environment.txt
+      - name: Upload performance evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: performance-evidence-${{ github.run_id }}
+          path: artifacts
+          if-no-files-found: error
+      - name: Quality gate
+        if: always()
+        run: |
+          test '${{ steps.rest.outcome }}' = 'success'
+          test '${{ steps.graphql.outcome }}' = 'success'
+          test '${{ steps.browser.outcome }}' = 'success'
+          test '${{ steps.diagnosis.outcome }}' = 'success'
