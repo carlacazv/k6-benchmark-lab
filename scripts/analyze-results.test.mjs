@@ -35,8 +35,24 @@ const base = {
 const passed = runCase(base, 0, true);
 if (Math.abs(passed.results[0].metrics.apdex - 0.95) > 1e-9) throw new Error('Unexpected Apdex');
 if (passed.results[0].metrics.p99Ms !== 150 || passed.results[0].metrics.requestRate !== 10) throw new Error('Expected p99/throughput evidence');
+if (passed.results[0].metrics.apdexGate.eligible !== false) throw new Error('10 Apdex observations should remain informational with the default 20-sample gate');
 
-const failed = structuredClone(base);
-failed.metrics.http_req_duration.thresholds['p(95)<100'] = { ok: false };
-runCase(failed, 1, false);
+const failedThreshold = structuredClone(base);
+failedThreshold.metrics.http_req_duration.thresholds['p(95)<100'] = { ok: false };
+runCase(failedThreshold, 1, false);
+
+const smallLowApdex = structuredClone(base);
+smallLowApdex.metrics.apdex_satisfied.values.count = 1;
+smallLowApdex.metrics.apdex_tolerating.values.count = 1;
+const small = runCase(smallLowApdex, 0, true);
+if (Math.abs(small.results[0].metrics.apdex - 0.75) > 1e-9) throw new Error('Expected small-sample Apdex 0.75');
+if (small.results[0].metrics.apdexGate.eligible !== false || small.results[0].metrics.apdexGate.pass !== true) throw new Error('Small Apdex sample should be informational, not a release gate');
+
+const largeLowApdex = structuredClone(base);
+largeLowApdex.meta.apdexMinSamples = 20;
+largeLowApdex.metrics.apdex_satisfied.values.count = 10;
+largeLowApdex.metrics.apdex_tolerating.values.count = 10;
+const large = runCase(largeLowApdex, 1, false);
+if (large.results[0].metrics.apdexGate.eligible !== true || large.results[0].metrics.apdexGate.pass !== false) throw new Error('Low Apdex with enough observations must fail the gate');
+
 console.log('analyzer tests passed');

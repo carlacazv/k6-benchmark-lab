@@ -1,0 +1,46 @@
+version: 1
+required: true
+
+source:
+  type: datadog
+  baseUrl: https://api.datadoghq.com
+  apiKeyEnv: DD_API_KEY
+  appKeyEnv: DD_APP_KEY
+
+analysis:
+  bucketSeconds: 10
+  prePaddingSeconds: 60
+  postPaddingSeconds: 120
+  minimumMatchedBuckets: 12
+  strongCorrelation: 0.65
+  maxLagBuckets: 6
+
+signals:
+  cpu:
+    role: cpu_utilization
+    unit: percent
+    threshold: 85
+    seriesAggregation: avg
+    query: avg:YOUR_CPU_UTILIZATION_METRIC{service:checkout}
+  memory:
+    role: memory_utilization
+    unit: percent
+    threshold: 90
+    seriesAggregation: avg
+    query: avg:YOUR_MEMORY_UTILIZATION_METRIC{service:checkout}
+  dependencyLatency:
+    role: dependency_latency_ms
+    unit: ms
+    seriesAggregation: avg
+    query: avg:YOUR_DEPENDENCY_LATENCY_METRIC{service:checkout}
+  dbPool:
+    role: db_pool_utilization
+    unit: ratio
+    threshold: 0.85
+    seriesAggregation: avg
+    query: avg:YOUR_DB_POOL_UTILIZATION_METRIC{service:checkout}
+  replicas:
+    role: replicas
+    unit: count
+    seriesAggregation: sum
+    query: sum:YOUR_REPLICA_COUNT_METRIC{deployment:checkout}

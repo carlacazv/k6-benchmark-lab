@@ -1,0 +1,58 @@
+version: 1
+required: true
+
+source:
+  type: prometheus
+  baseUrl: https://prometheus.example.com
+  auth:
+    mode: bearer
+    tokenEnv: PROMETHEUS_TOKEN
+
+analysis:
+  bucketSeconds: 5
+  prePaddingSeconds: 60
+  postPaddingSeconds: 120
+  minimumMatchedBuckets: 12
+  strongCorrelation: 0.65
+  maxLagBuckets: 6
+
+signals:
+  cpu:
+    role: cpu_utilization
+    unit: ratio
+    threshold: 0.85
+    seriesAggregation: avg
+    query: YOUR_CPU_UTILIZATION_PROMQL
+  processMemory:
+    role: process_memory_bytes
+    unit: bytes
+    seriesAggregation: sum
+    query: YOUR_PROCESS_MEMORY_PROMQL
+  dbPool:
+    role: db_pool_utilization
+    unit: ratio
+    threshold: 0.85
+    seriesAggregation: avg
+    query: YOUR_DB_POOL_UTILIZATION_PROMQL
+  dbWait:
+    role: db_wait_ms
+    unit: ms
+    seriesAggregation: avg
+    query: YOUR_DB_WAIT_PROMQL
+  dependencyLatency:
+    role: dependency_latency_ms
+    unit: ms
+    seriesAggregation: avg
+    query: YOUR_DEPENDENCY_LATENCY_PROMQL
+  cacheHit:
+    role: cache_hit_ratio
+    unit: ratio
+    threshold: 0.80
+    direction: below
+    seriesAggregation: avg
+    query: YOUR_CACHE_HIT_RATIO_PROMQL
+  replicas:
+    role: replicas
+    unit: count
+    seriesAggregation: sum
+    query: YOUR_REPLICA_COUNT_PROMQL

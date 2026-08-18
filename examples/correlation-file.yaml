@@ -1,0 +1,27 @@
+version: 1
+required: false
+
+source:
+  type: file
+  path: fixtures/correlation/telemetry.json
+
+analysis:
+  bucketSeconds: 5
+  prePaddingSeconds: 30
+  postPaddingSeconds: 60
+  minimumMatchedBuckets: 8
+  strongCorrelation: 0.65
+  maxLagBuckets: 4
+
+signals:
+  cpu:
+    role: cpu_utilization
+    unit: ratio
+    threshold: 0.85
+  memory:
+    role: memory_utilization
+    unit: ratio
+    threshold: 0.90
+  dependencyLatency:
+    role: dependency_latency_ms
+    unit: ms

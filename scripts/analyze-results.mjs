@@ -48,6 +48,9 @@ function analyze(file) {
   const iterationRate = val(s, 'iterations', 'rate');
   const failedThresholds = thresholdFailures(s);
   const minApdex = Number(s?.meta?.apdexMin ?? process.env.APDEX_MIN ?? 0.85);
+  const minApdexSamples = Number(s?.meta?.apdexMinSamples ?? process.env.APDEX_MIN_SAMPLES ?? 20);
+  const apdexGateEligible = total >= minApdexSamples;
+  const apdexGatePass = apdex === null || !apdexGateEligible || apdex >= minApdex;
   const webVitals = {
     lcpP90Ms: optionalVal(s, 'browser_web_vital_lcp', 'p(90)'),
     inpP90Ms: optionalVal(s, 'browser_web_vital_inp', 'p(90)'),
@@ -83,15 +86,20 @@ function analyze(file) {
     recommendations.push('First increase preAllocatedVUs/maxVUs; if drops persist, treat them as capacity evidence and inspect SUT saturation.');
   }
   if (apdex !== null && apdex < minApdex) {
-    hypotheses.push(`Apdex ${apdex.toFixed(3)} is below the configured floor ${minApdex}.`);
-    recommendations.push('Inspect the raw satisfied/tolerating/frustrated counts; do not use Apdex alone to diagnose the subsystem.');
+    if (apdexGateEligible) {
+      hypotheses.push(`Apdex ${apdex.toFixed(3)} is below the configured floor ${minApdex}.`);
+      recommendations.push('Inspect the raw satisfied/tolerating/frustrated counts; do not use Apdex alone to diagnose the subsystem.');
+    } else {
+      hypotheses.push(`Apdex ${apdex.toFixed(3)} is below ${minApdex}, but only ${total} observations are available; the Apdex gate requires ${minApdexSamples} and remains informational.`);
+      recommendations.push('Collect enough representative user operations before using Apdex as a pass/fail signal; do not lower the floor to make a smoke run pass.');
+    }
   }
   if (!hypotheses.length) {
     hypotheses.push('No obvious bottleneck signature was detected in the aggregate k6 summary.');
     recommendations.push('Correlate with application telemetry before concluding the system has spare capacity; aggregate summaries can hide short saturation windows.');
   }
 
-  const pass = failedThresholds.length === 0 && (apdex === null || apdex >= minApdex) && dropped === 0;
+  const pass = failedThresholds.length === 0 && apdexGatePass && dropped === 0;
   return {
     file,
     meta: s.meta ?? {},
@@ -106,6 +114,7 @@ function analyze(file) {
       droppedIterations: dropped,
       apdex,
       apdexCounts: { satisfied: sat, tolerating: tol, frustrated: fru },
+      apdexGate: { eligible: apdexGateEligible, minSamples: minApdexSamples, floor: minApdex, observations: total, pass: apdexGatePass },
       webVitals,
     },
     failedThresholds,
@@ -144,6 +153,7 @@ for (const r of results) {
     `- Error rate: ${(r.metrics.errorRate * 100).toFixed(2)}%`,
     `- Dropped iterations: ${r.metrics.droppedIterations}`,
     `- Apdex: ${r.metrics.apdex === null ? 'n/a' : r.metrics.apdex.toFixed(3)} (S=${r.metrics.apdexCounts.satisfied}, T=${r.metrics.apdexCounts.tolerating}, F=${r.metrics.apdexCounts.frustrated})`,
+    `- Apdex gate: ${r.metrics.apdexGate.eligible ? `evaluated against ${r.metrics.apdexGate.floor} (${r.metrics.apdexGate.observations} observations)` : `informational only (${r.metrics.apdexGate.observations}/${r.metrics.apdexGate.minSamples} minimum observations)`}`,
   );
 
   const w = r.metrics.webVitals;

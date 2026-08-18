@@ -17,19 +17,33 @@ function authorizationHeaders(auth = {}) {
   throw new Error(`Unsupported Prometheus auth.mode=${mode}. Use none|bearer|basic.`);
 }
 
-export function parsePrometheusMatrix(payload) {
+function aggregate(values, mode) {
+  if (!values.length) return null;
+  if (mode === 'sum') return values.reduce((sum, value) => sum + value, 0);
+  if (mode === 'avg') return values.reduce((sum, value) => sum + value, 0) / values.length;
+  if (mode === 'max') return Math.max(...values);
+  if (mode === 'min') return Math.min(...values);
+  throw new Error(`Unsupported seriesAggregation=${mode}. Use sum|avg|max|min.`);
+}
+
+export function parsePrometheusMatrix(payload, seriesAggregation = 'sum') {
   if (payload?.status !== 'success') throw new Error(`Prometheus query failed: ${payload?.error ?? 'unknown response'}`);
   if (payload?.data?.resultType !== 'matrix') throw new Error(`Prometheus query_range returned ${payload?.data?.resultType ?? 'no resultType'}; expected matrix.`);
-  const sums = new Map();
+  const buckets = new Map();
   for (const series of payload.data.result ?? []) {
     for (const pair of series.values ?? []) {
       const timestamp = Number(pair[0]);
       const value = Number(pair[1]);
       if (!Number.isFinite(timestamp) || !Number.isFinite(value)) continue;
-      sums.set(timestamp, (sums.get(timestamp) ?? 0) + value);
+      const values = buckets.get(timestamp) ?? [];
+      values.push(value);
+      buckets.set(timestamp, values);
     }
   }
-  return [...sums.entries()].sort((a, b) => a[0] - b[0]).map(([timestamp, value]) => ({ timestamp: new Date(timestamp * 1000).toISOString(), value }));
+  return [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([timestamp, values]) => ({
+    timestamp: new Date(timestamp * 1000).toISOString(),
+    value: aggregate(values, seriesAggregation),
+  }));
 }
 
 export async function loadPrometheusSeries(source, config) {
@@ -45,5 +59,9 @@ export async function loadPrometheusSeries(source, config) {
   const response = await fetch(url, { headers: { Accept: 'application/json', ...authorizationHeaders(source.auth) } });
   if (!response.ok) throw new Error(`Prometheus query_range HTTP ${response.status}: ${await response.text()}`);
   const payload = await response.json();
-  return { samples: parsePrometheusMatrix(payload), provenance: { type: 'prometheus', baseUrl: source.baseUrl, query: source.query, authMode: source.auth?.mode ?? 'none' } };
+  const seriesAggregation = source.seriesAggregation ?? 'sum';
+  return {
+    samples: parsePrometheusMatrix(payload, seriesAggregation),
+    provenance: { type: 'prometheus', baseUrl: source.baseUrl, query: source.query, authMode: source.auth?.mode ?? 'none', seriesAggregation },
+  };
 }

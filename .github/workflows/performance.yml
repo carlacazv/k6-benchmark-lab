@@ -18,6 +18,10 @@ on:
         description: 'Repository path to telemetry discovery config'
         required: false
         default: 'telemetry-discovery.yaml'
+      correlation_config:
+        description: 'Repository path to post-test telemetry correlation config'
+        required: false
+        default: 'telemetry-correlation.yaml'
 
 permissions:
   contents: read
@@ -29,6 +33,7 @@ jobs:
     env:
       PERFORMANCE_PLAN: ${{ github.event.inputs.plan || 'performance-test-plan.yaml' }}
       TELEMETRY_DISCOVERY_CONFIG: ${{ github.event.inputs.telemetry_config || 'telemetry-discovery.yaml' }}
+      TELEMETRY_CORRELATION_CONFIG: ${{ github.event.inputs.correlation_config || 'telemetry-correlation.yaml' }}
       SCENARIO_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.scenario || 'smoke' }}
       K6_REPORT_DIR: artifacts/manual
       BROWSER_ITERATIONS: '2'
@@ -61,26 +66,28 @@ jobs:
           echo $! > /tmp/lab.pid
           for i in {1..30}; do curl -fsS http://127.0.0.1:3000/health && break; sleep 1; done
           curl -fsS http://127.0.0.1:3000/__config
-      - name: REST performance
+      - name: REST performance with exact test window
         id: rest
         if: steps.readiness.outcome == 'success'
         continue-on-error: true
-        env: { K6_REPORT_DIR: artifacts/rest }
-        run: mkdir -p artifacts/rest && k6 run tests/rest/performance.js
-      - name: GraphQL performance
+        run: node scripts/run-k6-with-window.mjs tests/rest/performance.js artifacts/rest rest
+      - name: GraphQL performance with exact test window
         id: graphql
         if: steps.readiness.outcome == 'success'
         continue-on-error: true
-        env: { K6_REPORT_DIR: artifacts/graphql }
-        run: mkdir -p artifacts/graphql && k6 run tests/graphql/performance.js
-      - name: Frontend performance
+        run: node scripts/run-k6-with-window.mjs tests/graphql/performance.js artifacts/graphql graphql
+      - name: Frontend performance with exact test window
         id: browser
         if: steps.readiness.outcome == 'success'
         continue-on-error: true
         env:
-          K6_REPORT_DIR: artifacts/browser
           K6_BROWSER_HEADLESS: 'true'
-        run: mkdir -p artifacts/browser && k6 run tests/browser/performance.js
+        run: node scripts/run-k6-with-window.mjs tests/browser/performance.js artifacts/browser browser
+      - name: Correlate post-test telemetry
+        id: correlation
+        if: always() && steps.readiness.outcome == 'success'
+        continue-on-error: true
+        run: node scripts/correlate.mjs "$TELEMETRY_CORRELATION_CONFIG" --artifacts artifacts --out-dir artifacts/correlation
       - name: Generate evidence-based diagnosis
         id: diagnosis
         if: always() && steps.readiness.outcome == 'success'
@@ -90,7 +97,7 @@ jobs:
         if: always()
         run: |
           mkdir -p artifacts/evidence
-          { echo '# Runner'; uname -a; echo; echo '# CPU'; lscpu; echo; echo '# Memory'; free -h; echo; echo '# Telemetry discovery'; cat artifacts/discovery/workload-profile.md || true; echo; echo '# Performance plan'; cat "$PERFORMANCE_PLAN" || true; echo; echo '# Readiness'; cat artifacts/readiness/readiness-report.md || true; echo; echo '# Lab config'; curl -fsS http://127.0.0.1:3000/__config || true; echo; echo '# Lab metrics'; curl -fsS http://127.0.0.1:3000/metrics || true; echo; echo '# Lab stdout'; cat /tmp/lab.log || true; } > artifacts/evidence/environment.txt
+          { echo '# Runner'; uname -a; echo; echo '# CPU'; lscpu; echo; echo '# Memory'; free -h; echo; echo '# Telemetry discovery'; cat artifacts/discovery/workload-profile.md || true; echo; echo '# Performance plan'; cat "$PERFORMANCE_PLAN" || true; echo; echo '# Readiness'; cat artifacts/readiness/readiness-report.md || true; echo; echo '# Telemetry correlation'; cat artifacts/correlation/telemetry-correlation.md || true; echo; echo '# Lab config'; curl -fsS http://127.0.0.1:3000/__config || true; echo; echo '# Lab metrics'; curl -fsS http://127.0.0.1:3000/metrics || true; echo; echo '# Lab stdout'; cat /tmp/lab.log || true; } > artifacts/evidence/environment.txt
       - name: Upload performance evidence
         if: always()
         uses: actions/upload-artifact@v6
@@ -106,4 +113,5 @@ jobs:
           test '${{ steps.rest.outcome }}' = 'success'
           test '${{ steps.graphql.outcome }}' = 'success'
           test '${{ steps.browser.outcome }}' = 'success'
+          test '${{ steps.correlation.outcome }}' = 'success'
           test '${{ steps.diagnosis.outcome }}' = 'success'

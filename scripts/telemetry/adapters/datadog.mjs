@@ -7,18 +7,32 @@ function authHeaders(source = {}) {
   return { 'DD-API-KEY': apiKey, 'DD-APPLICATION-KEY': appKey, Accept: 'application/json' };
 }
 
-export function parseDatadogSeries(payload) {
+function aggregate(values, mode) {
+  if (!values.length) return null;
+  if (mode === 'sum') return values.reduce((sum, value) => sum + value, 0);
+  if (mode === 'avg') return values.reduce((sum, value) => sum + value, 0) / values.length;
+  if (mode === 'max') return Math.max(...values);
+  if (mode === 'min') return Math.min(...values);
+  throw new Error(`Unsupported seriesAggregation=${mode}. Use sum|avg|max|min.`);
+}
+
+export function parseDatadogSeries(payload, seriesAggregation = 'sum') {
   if (payload?.status && payload.status !== 'ok') throw new Error(`Datadog query failed: ${payload.error ?? payload.status}`);
-  const sums = new Map();
+  const buckets = new Map();
   for (const series of payload?.series ?? []) {
     for (const point of series.pointlist ?? []) {
       const timestampMs = Number(point[0]);
       const value = Number(point[1]);
       if (!Number.isFinite(timestampMs) || !Number.isFinite(value)) continue;
-      sums.set(timestampMs, (sums.get(timestampMs) ?? 0) + value);
+      const values = buckets.get(timestampMs) ?? [];
+      values.push(value);
+      buckets.set(timestampMs, values);
     }
   }
-  return [...sums.entries()].sort((a, b) => a[0] - b[0]).map(([timestampMs, value]) => ({ timestamp: new Date(timestampMs).toISOString(), value }));
+  return [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([timestampMs, values]) => ({
+    timestamp: new Date(timestampMs).toISOString(),
+    value: aggregate(values, seriesAggregation),
+  }));
 }
 
 export async function loadDatadogSeries(source, config) {
@@ -32,5 +46,9 @@ export async function loadDatadogSeries(source, config) {
   url.searchParams.set('query', source.query);
   const response = await fetch(url, { headers: authHeaders(source) });
   if (!response.ok) throw new Error(`Datadog metrics query HTTP ${response.status}: ${await response.text()}`);
-  return { samples: parseDatadogSeries(await response.json()), provenance: { type: 'datadog', baseUrl, query: source.query } };
+  const seriesAggregation = source.seriesAggregation ?? 'sum';
+  return {
+    samples: parseDatadogSeries(await response.json(), seriesAggregation),
+    provenance: { type: 'datadog', baseUrl, query: source.query, seriesAggregation },
+  };
 }
