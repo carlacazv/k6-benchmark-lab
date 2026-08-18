@@ -1,0 +1,20 @@
+import { buildWorkloadProfile, percentile } from './lib/telemetry-core.mjs';
+import { aggregateAccessLogLines } from './telemetry/adapters/access-log.mjs';
+import { parsePrometheusMatrix } from './telemetry/adapters/prometheus.mjs';
+import { parseDatadogSeries } from './telemetry/adapters/datadog.mjs';
+import { loadSyntheticSeries } from './telemetry/adapters/synthetic.mjs';
+
+if (percentile([1, 2, 3, 4, 5], 50) !== 3) throw new Error('percentile median failed');
+const synthetic = await loadSyntheticSeries({ seed: 7, start: '2026-08-01T00:00:00Z', eventDayOffset: 8 }, { window: { days: 14, stepSeconds: 3600 } });
+const profile = buildWorkloadProfile(synthetic.samples, { window: { days: 14, stepSeconds: 3600 }, analysis: { minimumSamples: 168, eventMadMultiplier: 4, minimumEventBuckets: 2 } }, synthetic.provenance);
+if (profile.quality.confidence !== 'HIGH') throw new Error(`expected HIGH confidence, got ${profile.quality.confidence}`);
+if (!(profile.recommendation.observedPeakRate > profile.recommendation.baselineRate)) throw new Error('peak should exceed baseline');
+if (!profile.eventDetection.events.length) throw new Error('expected exceptional interval');
+const prometheus = parsePrometheusMatrix({ status: 'success', data: { resultType: 'matrix', result: [{ values: [[1000, '3'], [1060, '4']] }, { values: [[1000, '2'], [1060, '1']] }] } });
+if (prometheus[0].value !== 5 || prometheus[1].value !== 5) throw new Error('Prometheus matrix aggregation failed');
+const datadog = parseDatadogSeries({ status: 'ok', series: [{ pointlist: [[1000000, 3], [1060000, 4]] }, { pointlist: [[1000000, 2], [1060000, 1]] }] });
+if (datadog[0].value !== 5 || datadog[1].value !== 5) throw new Error('Datadog series aggregation failed');
+const lines = [JSON.stringify({ timestamp: '2026-08-01T00:00:01Z', operation: 'checkout' }), JSON.stringify({ timestamp: '2026-08-01T00:00:20Z', operation: 'checkout' }), JSON.stringify({ timestamp: '2026-08-01T00:02:30Z', operation: 'browse' })];
+const aggregated = aggregateAccessLogLines(lines, { operationFilterField: 'operation', operationFilterValue: 'checkout' }, 60);
+if (aggregated.length !== 3 || Math.abs(aggregated[0].value - 2 / 60) > 1e-9 || aggregated[1].value !== 0 || aggregated[2].value !== 0) throw new Error('access-log zero-bucket aggregation failed');
+console.log('telemetry discovery tests passed');

@@ -1,0 +1,23 @@
+version: 1
+unit: iterations_per_second
+
+source:
+  type: synthetic
+  start: 2026-08-01T00:00:00Z
+  seed: 7
+  baseRate: 34
+  eventDayOffset: 8
+  eventStartHour: 14
+
+window:
+  days: 14
+  stepSeconds: 3600
+
+analysis:
+  baselinePercentile: 75
+  peakPercentile: 99
+  minimumCoverageRatio: 0.95
+  minimumSamples: 168
+  eventMadMultiplier: 4
+  minimumEventBuckets: 2
+  busyHoursTop: 5

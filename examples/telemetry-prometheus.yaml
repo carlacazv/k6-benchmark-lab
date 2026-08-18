@@ -1,0 +1,23 @@
+version: 1
+unit: iterations_per_second
+
+source:
+  type: prometheus
+  baseUrl: https://prometheus.example.com
+  query: sum(rate(http_requests_total[5m]))
+  auth:
+    mode: bearer
+    tokenEnv: PROMETHEUS_TOKEN
+
+window:
+  days: 14
+  stepSeconds: 300
+
+analysis:
+  baselinePercentile: 75
+  peakPercentile: 99
+  minimumCoverageRatio: 0.9
+  minimumSamples: 1000
+  eventMadMultiplier: 6
+  minimumEventBuckets: 3
+  busyHoursTop: 5

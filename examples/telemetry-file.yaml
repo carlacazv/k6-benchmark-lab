@@ -1,0 +1,21 @@
+version: 1
+unit: iterations_per_second
+
+source:
+  type: file
+  file: exported-production-traffic.json
+  timestampField: timestamp
+  valueField: value
+
+window:
+  days: 14
+  stepSeconds: 300
+
+analysis:
+  baselinePercentile: 75
+  peakPercentile: 99
+  minimumCoverageRatio: 0.9
+  minimumSamples: 1000
+  eventMadMultiplier: 6
+  minimumEventBuckets: 3
+  busyHoursTop: 5

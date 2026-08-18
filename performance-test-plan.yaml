@@ -11,6 +11,9 @@ objective:
 volume:
   unit: iterations_per_second
   oneIterationModelsOneOperation: true
+  discoveryProfile: artifacts/discovery/workload-profile.json
+  discoveryRequired: true
+  discoveryMinimumConfidence: MEDIUM
   activeUsers: 1000
   operationsPerUser: 3
   observationWindowSeconds: 600

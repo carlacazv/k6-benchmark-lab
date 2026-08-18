@@ -1,100 +1,79 @@
 # k6 Benchmark Lab
 
-A performance-engineering learning lab for QAs who need to design, execute and diagnose k6 tests with safety, confidence and technical discipline.
+A performance-engineering learning lab for QAs who need to discover production demand, design safe tests, execute k6 workloads and diagnose results with evidence instead of guesswork.
 
-## The workflow
-1. Write a versioned `performance-test-plan.yaml`.
-2. Discover non-functional acceptance criteria.
-3. Derive baseline, observed peak, design peak with headroom and a controlled breakpoint exploration ceiling from production telemetry/business volume.
-4. Verify that one k6 iteration represents the business operation used in the volume calculation.
-5. Verify application instrumentation and production-vs-test capacity/configuration.
-6. Let the readiness engine recommend the scenario: smoke, baseline, load, stress, spike, soak/endurance or breakpoint.
-7. Execute REST, GraphQL or browser performance adapters against an authorized target.
-8. Analyze p95/p99, errors, throughput, dropped iterations, Web Vitals and Apdex.
-9. Correlate with application/infrastructure telemetry.
-10. Produce readiness evidence, bottleneck hypotheses and recommendations in the CI artifact.
+## Engineering workflow
 
-Read the guides in `docs/` in numeric order before running anything above smoke.
+1. Discover production workload from telemetry (`mise run discover`).
+2. Review data quality, baseline/peak percentiles, busy periods and exceptional events.
+3. Define or confirm non-functional acceptance criteria.
+4. Let the readiness engine consume the discovery profile, compare PRD vs TEST and recommend the scenario.
+5. Execute REST, GraphQL or browser adapters only after the readiness gate passes.
+6. Analyze p95/p99, errors, throughput, dropped iterations, Apdex and Core Web Vitals.
+7. Correlate hypotheses with application/infrastructure telemetry.
+8. Preserve discovery, readiness, raw summaries, diagnosis and environment facts as CI evidence.
 
-## Phase 2: performance readiness engine
-
-Performance execution is now preceded by a machine-enforced preflight:
-
-```text
-performance-test-plan.yaml
-        |
-        v
-NFR + authorization validation
-        |
-        v
-traffic model + headroom
-        |
-        v
-PRD vs TEST capacity/parity
-        |
-        v
-observability readiness
-        |
-        v
-scenario recommendation + VU starting point
-        |
-        v
-artifacts/readiness/runtime.env
-        |
-        v
-k6 adapters
-```
-
-The engine writes:
-- `artifacts/readiness/readiness-report.md` for humans;
-- `artifacts/readiness/readiness.json` for automation;
-- `artifacts/readiness/runtime.env` for k6 runtime configuration.
-
-A non-smoke test is blocked when authorization, required NFRs, volume mapping, environment capacity, application metrics, infrastructure metrics or logs are missing. Warnings remain visible for uncertainties such as estimated traffic, missing traces or topology differences.
+Read `docs/` in numeric order before running anything above smoke.
 
 ## Quick start
 
 ```bash
 mise install
-mise run readiness      # inspect the plan before generating load
-mise run lab            # terminal 1
-mise run ci-smoke       # safe pipeline-equivalent smoke
-mise run suite          # uses the scenario recommended by the plan
+mise run discover
+mise run readiness
+mise run lab             # terminal 1
+mise run ci-smoke        # terminal 2, safe end-to-end path
 ```
 
-You can still run an adapter directly when experimenting locally:
+Or let the plan choose the scenario after discovery: `mise run suite`.
 
-```bash
-SCENARIO=smoke K6_REPORT_DIR=artifacts/rest mise run rest
-SCENARIO=smoke K6_REPORT_DIR=artifacts/graphql mise run graphql
-SCENARIO=smoke K6_REPORT_DIR=artifacts/browser mise run frontend
-mise run analyze
+## Phase 3: Telemetry & Capacity Intelligence
+
+`telemetry-discovery.yaml` describes how to obtain an arrival-rate time series. Supported adapters:
+
+- `synthetic`: deterministic CI-only evidence;
+- `file`: normalized exported time series (also useful for exported CloudWatch/APM data);
+- `access-log`: NDJSON request logs aggregated into operations/second;
+- `prometheus`: Prometheus-compatible query API, including Grafana Cloud Metrics/Mimir-compatible backends;
+- `datadog`: Datadog metrics timeseries query API.
+
+OpenTelemetry is handled at the storage backend: OTLP/Collector exports data to an observability backend, then the corresponding query adapter reads the historical series.
+
+Discovery writes `workload-profile.json`, `workload-profile.md` and `plan-volume-suggestion.yaml`. The profile includes coverage/confidence, p50/p75/p95/p99/max, busiest UTC hours, volatility, exceptional intervals and recommended baseline/observed peak. Exceptional events are surfaced for human review and are not silently promoted into the normal capacity requirement.
+
+## Discovery feeds readiness
+
+```yaml
+volume:
+  discoveryProfile: artifacts/discovery/workload-profile.json
+  discoveryRequired: true
+  discoveryMinimumConfidence: MEDIUM
 ```
 
-## Volume terminology
+When loaded, discovered baseline/peak supersede manual fallback values. Non-smoke execution is blocked when a required profile is missing, incompatible, malformed or below the configured confidence floor.
 
-The readiness engine models **iterations per second**, not an ambiguous raw user count. One k6 iteration must map to the business operation used in the volume calculation. Existing `BASELINE_RPS`, `PEAK_RPS` and `LIMIT_RPS` variables remain supported for compatibility, while generated plans prefer `BASELINE_RATE`, `PEAK_RATE` and `LIMIT_RATE`.
+## Credentials
 
-`explorationCeiling` is intentionally not called “the system limit”: the true breakpoint only exists after a controlled test shows where an NFR, safety guardrail or resource boundary is consistently crossed.
-
-## Dynamic environment
-
-The same scripts run in local/test/CI environments. The performance plan is source-controlled and contains non-secret test design facts. Runtime values are exported as env vars; credentials and tokens still belong in environment variables/secrets, never in the plan.
+Telemetry config stores only names of credential env vars, never secret values. Prometheus supports `none`, `bearer` and `basic`; Datadog uses API/application keys from env vars.
 
 ## Safe default
 
-PRs and pushes run only `smoke`. Higher-load scenarios are explicit `workflow_dispatch` choices or `mise run suite` locally after readiness passes. Public demo systems are for small-scale learning; aggressive load belongs on infrastructure you own or are explicitly authorized to test.
+PR/push pipelines still execute only `smoke`, even if the objective recommends `load`. Manual `workflow_dispatch` can select `auto` after discovery/readiness. Aggressive tests belong only on infrastructure you own or are explicitly authorized to test.
 
 ## Architecture
 
-This project uses Ports & Adapters + Strategy plus a preflight policy layer. Saga remains intentionally rejected because there is no distributed transaction/compensation problem to solve. See `docs/architecture.md` and `docs/08-readiness-engine.md`.
+```text
+Telemetry adapters -> Production profiler -> Workload profile
+                                      |
+                                      v
+Performance plan -> Readiness policy engine -> Runtime env -> k6 adapters
+                                                     |
+                                                     v
+                                               Diagnosis/evidence
+```
+
+The project remains Ports & Adapters + Strategy. Saga remains intentionally out of scope.
 
 ## CI evidence
 
-GitHub Actions uploads:
-- readiness Markdown/JSON/runtime env;
-- raw k6 `summary.json` for REST, GraphQL and browser;
-- `performance-diagnosis.md` and `performance-diagnosis.json`;
-- runner CPU/memory, selected plan, local target configuration/metrics/logs.
-
-Readiness and k6 threshold failures still upload evidence before the final quality gate fails the workflow.
+GitHub Actions uploads telemetry discovery profile, readiness Markdown/JSON/runtime env, raw k6 summaries, diagnosis Markdown/JSON and runner/target evidence. Failures still leave artifacts explaining why the run failed or was blocked.

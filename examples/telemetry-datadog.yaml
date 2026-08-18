@@ -1,0 +1,22 @@
+version: 1
+unit: iterations_per_second
+
+source:
+  type: datadog
+  baseUrl: https://api.datadoghq.com
+  query: sum:trace.web.request.hits{service:my-api}.as_rate()
+  apiKeyEnv: DD_API_KEY
+  appKeyEnv: DD_APP_KEY
+
+window:
+  days: 14
+  stepSeconds: 300
+
+analysis:
+  baselinePercentile: 75
+  peakPercentile: 99
+  minimumCoverageRatio: 0.8
+  minimumSamples: 168
+  eventMadMultiplier: 6
+  minimumEventBuckets: 2
+  busyHoursTop: 5
