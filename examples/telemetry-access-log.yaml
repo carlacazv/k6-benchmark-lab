@@ -1,0 +1,22 @@
+version: 1
+unit: iterations_per_second
+
+source:
+  type: access-log
+  file: fixtures/telemetry/access-log.ndjson
+  timestampField: timestamp
+  operationFilterField: operation
+  operationFilterValue: checkout
+
+window:
+  days: 1
+  stepSeconds: 60
+
+analysis:
+  baselinePercentile: 75
+  peakPercentile: 99
+  minimumCoverageRatio: 0.001
+  minimumSamples: 1
+  eventMadMultiplier: 6
+  minimumEventBuckets: 2
+  busyHoursTop: 5

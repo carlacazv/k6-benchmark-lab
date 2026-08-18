@@ -1,0 +1,16 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { hydratePlanFromDiscovery, applyDiscoveryPolicy } from './lib/discovery-readiness.mjs';
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'discovery-readiness-'));
+const profilePath = path.join(dir, 'profile.json');
+fs.writeFileSync(profilePath, JSON.stringify({ schemaVersion: 1, unit: 'iterations_per_second', source: { type: 'file' }, quality: { confidence: 'HIGH', warnings: [] }, recommendation: { baselineRate: 50, observedPeakRate: 90 }, eventDetection: { events: [{ start: 'x' }] } }));
+const plan = { volume: { unit: 'iterations_per_second', discoveryProfile: profilePath, discoveryRequired: true, discoveryMinimumConfidence: 'MEDIUM' } };
+const hydrated = hydratePlanFromDiscovery(plan);
+if (!hydrated.discovery.loaded || hydrated.plan.volume.observedBaselineRate !== 50 || hydrated.plan.volume.observedPeakRate !== 90) throw new Error('discovery hydration failed');
+const assessment = applyDiscoveryPolicy({ scenario: 'load', blockers: [], warnings: [], notes: [], status: 'READY' }, hydrated.discovery, hydrated.plan.volume);
+if (assessment.status === 'BLOCKED' || !assessment.notes.some((n) => n.includes('exceptional'))) throw new Error('discovery policy failed');
+const missing = hydratePlanFromDiscovery({ volume: { discoveryProfile: path.join(dir, 'missing.json'), discoveryRequired: true } });
+const blocked = applyDiscoveryPolicy({ scenario: 'load', blockers: [], warnings: [], notes: [] }, missing.discovery, missing.plan.volume);
+if (!blocked.blockers.some((b) => b.code === 'DISCOVERY_PROFILE_REQUIRED')) throw new Error('missing profile was not blocked');
+console.log('discovery readiness tests passed');
