@@ -1,0 +1,36 @@
+[tools]
+node = "24"
+k6 = "2.2.0"
+
+[env]
+TARGET_BASE_URL = "http://127.0.0.1:3000"
+SCENARIO = "smoke"
+K6_REPORT_DIR = "artifacts/manual"
+
+[tasks.setup]
+description = "Install pinned toolchain"
+run = "mise install"
+
+[tasks.lab]
+description = "Start the local instrumented study target"
+run = "node lab-app/server.mjs"
+
+[tasks.rest]
+description = "Run REST performance test (override SCENARIO/env as needed)"
+run = "mkdir -p ${K6_REPORT_DIR} && k6 run tests/rest/performance.js"
+
+[tasks.graphql]
+description = "Run GraphQL performance test"
+run = "mkdir -p ${K6_REPORT_DIR} && k6 run tests/graphql/performance.js"
+
+[tasks.frontend]
+description = "Run frontend/browser performance test"
+run = "mkdir -p ${K6_REPORT_DIR} && k6 run tests/browser/performance.js"
+
+[tasks.analyze]
+description = "Generate diagnosis from k6 summary artifacts"
+run = "node scripts/analyze-results.mjs artifacts artifacts/performance-diagnosis.md artifacts/performance-diagnosis.json"
+
+[tasks.ci-smoke]
+description = "Run the same safe smoke suite used in CI"
+run = "bash scripts/run-suite.sh smoke"

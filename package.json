@@ -1,0 +1,12 @@
+{
+  "name": "k6-benchmark-lab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "lab": "node lab-app/server.mjs",
+    "analyze": "node scripts/analyze-results.mjs artifacts artifacts/performance-diagnosis.md artifacts/performance-diagnosis.json",
+    "test:analyzer": "node scripts/analyze-results.test.mjs"
+  }
+}
