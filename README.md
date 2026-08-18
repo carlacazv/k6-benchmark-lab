@@ -42,3 +42,5 @@ GitHub Actions always uploads:
 - runner CPU/memory and local target configuration/metrics/logs.
 
 Threshold failures still generate evidence before the final quality gate fails the workflow.
+
+Every PR and push to the lab branch runs the safe smoke suite; higher-load profiles are manual and intentional.
