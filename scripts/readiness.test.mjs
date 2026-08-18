@@ -22,6 +22,19 @@ if (blockedAssessment.status !== 'BLOCKED' || !blockedAssessment.blockers.some((
   throw new Error('Authorization blocker was not enforced');
 }
 
+const invalidCheckRate = structuredClone(plan);
+invalidCheckRate.nfr.checkRate = 1.1;
+if (!assessPlan(invalidCheckRate, 'load').blockers.some((item) => item.code === 'NFR_CHECK_RATE_INVALID')) {
+  throw new Error('Invalid check rate was not blocked');
+}
+
+const invalidTraffic = structuredClone(plan);
+invalidTraffic.volume.observedBaselineRate = 20;
+invalidTraffic.volume.observedPeakRate = 10;
+if (!assessPlan(invalidTraffic, 'load').blockers.some((item) => item.code === 'TRAFFIC_PEAK_BELOW_BASELINE')) {
+  throw new Error('Peak below baseline was not blocked');
+}
+
 const scaled = parseSimpleYaml(fs.readFileSync('examples/scaled-performance-test-plan.yaml', 'utf8'));
 const scaledAssessment = assessPlan(scaled, 'breakpoint');
 if (scaledAssessment.status === 'BLOCKED') throw new Error(JSON.stringify(scaledAssessment.blockers));
