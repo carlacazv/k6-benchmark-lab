@@ -126,6 +126,9 @@ export function assessPlan(plan, scenarioOverride) {
   if (plan.target?.authorized !== true) {
     blockers.push(issue('blocker', 'TARGET_NOT_AUTHORIZED', 'The plan does not explicitly declare the target as authorized for performance testing.', 'Set target.authorized=true only after obtaining permission or use infrastructure you own.'));
   }
+  if (scenario !== 'smoke' && !String(plan.target?.baseUrl ?? '').trim()) {
+    blockers.push(issue('blocker', 'TARGET_URL_MISSING', 'A non-smoke plan must declare target.baseUrl explicitly.', 'Set the authorized test target URL in the plan; do not rely on an implicit default for load generation.'));
+  }
 
   const nfr = plan.nfr ?? {};
   for (const [field, label] of [['p95Ms', 'p95'], ['p99Ms', 'p99'], ['errorRate', 'error rate'], ['apdexTMs', 'Apdex T'], ['apdexMin', 'minimum Apdex']]) {
@@ -136,8 +139,9 @@ export function assessPlan(plan, scenarioOverride) {
   if (isFinitePositive(nfr.p95Ms) && isFinitePositive(nfr.p99Ms) && Number(nfr.p99Ms) < Number(nfr.p95Ms)) {
     blockers.push(issue('blocker', 'NFR_PERCENTILES_INVALID', 'nfr.p99Ms is lower than nfr.p95Ms.', 'Correct the percentile acceptance criteria.'));
   }
-  if (Number(nfr.errorRate) > 1) blockers.push(issue('blocker', 'NFR_ERROR_RATE_INVALID', 'nfr.errorRate must be expressed as a fraction between 0 and 1.', 'Use 0.01 for 1%, for example.'));
-  if (Number(nfr.apdexMin) > 1) blockers.push(issue('blocker', 'NFR_APDEX_INVALID', 'nfr.apdexMin must be between 0 and 1.', 'Choose a project-specific Apdex acceptance floor.'));
+  if (Number(nfr.errorRate) < 0 || Number(nfr.errorRate) > 1) blockers.push(issue('blocker', 'NFR_ERROR_RATE_INVALID', 'nfr.errorRate must be expressed as a fraction between 0 and 1.', 'Use 0.01 for 1%, for example.'));
+  if (!isFinitePositive(nfr.checkRate) || Number(nfr.checkRate) > 1) blockers.push(issue('blocker', 'NFR_CHECK_RATE_INVALID', 'nfr.checkRate must be a fraction greater than 0 and at most 1.', 'Use 0.99 for a 99% check success criterion, for example.'));
+  if (Number(nfr.apdexMin) <= 0 || Number(nfr.apdexMin) > 1) blockers.push(issue('blocker', 'NFR_APDEX_INVALID', 'nfr.apdexMin must be greater than 0 and at most 1.', 'Choose a project-specific Apdex acceptance floor.'));
 
   const trafficUnit = plan.volume?.unit;
   if (scenario !== 'smoke' && trafficUnit !== 'iterations_per_second') {
@@ -148,6 +152,15 @@ export function assessPlan(plan, scenarioOverride) {
   }
 
   const traffic = deriveTraffic(plan);
+  if (traffic.baseline && traffic.observedPeak < traffic.baseline) {
+    blockers.push(issue('blocker', 'TRAFFIC_PEAK_BELOW_BASELINE', `Observed/derived peak ${traffic.observedPeak} is lower than baseline ${traffic.baseline}.`, 'Correct the telemetry window or peak inputs before deriving headroom.'));
+  }
+  if (traffic.baseline && Number(traffic.headroomPercent) < 0) {
+    blockers.push(issue('blocker', 'TRAFFIC_HEADROOM_INVALID', 'volume.headroomPercent cannot be negative.', 'Use zero when no headroom is required, or a positive agreed margin.'));
+  }
+  if (traffic.baseline && Number(traffic.explorationMultiplier) < 1) {
+    blockers.push(issue('blocker', 'TRAFFIC_EXPLORATION_MULTIPLIER_INVALID', 'volume.explorationCeilingMultiplier must be at least 1.', 'Use a ceiling at or above design peak; the value is a safety bound, not a proven system limit.'));
+  }
   if (scenario !== 'smoke' && !traffic.baseline) {
     blockers.push(issue('blocker', 'TRAFFIC_BASELINE_UNKNOWN', 'No baseline arrival rate can be derived.', 'Provide observedBaselineRate from APM/gateway/logs or activeUsers + operationsPerUser + observationWindowSeconds.'));
   }
@@ -207,7 +220,11 @@ export function assessPlan(plan, scenarioOverride) {
     explorationCeiling: round(traffic.explorationCeiling * scaleRatio),
   } : { baseline: null, observedPeak: null, designPeak: null, explorationCeiling: null };
   const maxRate = maxRateForScenario(scenario, scaledTraffic);
-  const vus = estimatedVus(maxRate, nfr.p99Ms, plan.generator?.vuSafetyFactor ?? 1.5);
+  const safetyFactor = Number(plan.generator?.vuSafetyFactor ?? 1.5);
+  if (!Number.isFinite(safetyFactor) || safetyFactor < 1) {
+    blockers.push(issue('blocker', 'GENERATOR_SAFETY_FACTOR_INVALID', 'generator.vuSafetyFactor must be at least 1.', 'Use a factor of 1 or greater and recalibrate after a trial run.'));
+  }
+  const vus = estimatedVus(maxRate, nfr.p99Ms, safetyFactor);
 
   if (scenarioOverride && scenarioOverride !== 'auto' && scenarioOverride !== recommendedScenario) {
     notes.push(`Scenario override ${scenarioOverride} differs from objective recommendation ${recommendedScenario}.`);
