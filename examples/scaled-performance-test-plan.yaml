@@ -1,0 +1,52 @@
+version: 1
+
+target:
+  name: scaled-test-environment-example
+  baseUrl: https://test.example.internal
+  authorized: true
+
+objective:
+  type: find_breakpoint
+
+volume:
+  unit: iterations_per_second
+  oneIterationModelsOneOperation: true
+  observedBaselineRate: 80
+  observedPeakRate: 220
+  headroomPercent: 30
+  explorationCeilingMultiplier: 2
+
+environment:
+  comparisonMode: scaled
+  minimumCapacityRatio: 0.25
+  production:
+    replicas: 8
+    cpuCoresPerReplica: 2
+    memoryMbPerReplica: 4096
+  test:
+    replicas: 2
+    cpuCoresPerReplica: 2
+    memoryMbPerReplica: 4096
+  configurationParity:
+    databaseTopologyEquivalent: false
+    cacheTopologyEquivalent: true
+    networkPathEquivalent: true
+    autoscalingEquivalent: false
+
+observability:
+  applicationMetrics: true
+  infrastructureMetrics: true
+  logs: true
+  traces: true
+  dependencyMetrics: true
+
+nfr:
+  p95Ms: 350
+  p99Ms: 800
+  errorRate: 0.005
+  checkRate: 0.995
+  apdexTMs: 350
+  apdexMin: 0.9
+
+generator:
+  vuSafetyFactor: 1.75
