@@ -6,6 +6,7 @@ k6 = "2.2.0"
 TARGET_BASE_URL = "http://127.0.0.1:3000"
 SCENARIO = "smoke"
 K6_REPORT_DIR = "artifacts/manual"
+PERFORMANCE_PLAN = "performance-test-plan.yaml"
 
 [tasks.setup]
 description = "Install pinned toolchain"
@@ -14,6 +15,10 @@ run = "mise install"
 [tasks.lab]
 description = "Start the local instrumented study target"
 run = "node lab-app/server.mjs"
+
+[tasks.readiness]
+description = "Validate the performance plan, derive workload, compare environments and recommend a scenario"
+run = "node scripts/readiness.mjs ${PERFORMANCE_PLAN} --scenario auto --out-dir artifacts/readiness"
 
 [tasks.rest]
 description = "Run REST performance test (override SCENARIO/env as needed)"
@@ -31,6 +36,14 @@ run = "mkdir -p ${K6_REPORT_DIR} && k6 run tests/browser/performance.js"
 description = "Generate diagnosis from k6 summary artifacts"
 run = "node scripts/analyze-results.mjs artifacts artifacts/performance-diagnosis.md artifacts/performance-diagnosis.json"
 
+[tasks.suite]
+description = "Run the scenario recommended by the performance plan"
+run = "bash scripts/run-suite.sh auto"
+
 [tasks.ci-smoke]
 description = "Run the same safe smoke suite used in CI"
 run = "bash scripts/run-suite.sh smoke"
+
+[tasks.test]
+description = "Run analyzer and readiness-engine unit tests"
+run = "npm test"
