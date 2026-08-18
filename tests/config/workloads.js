@@ -1,8 +1,8 @@
 const n = (name, fallback) => Number(__ENV[name] || fallback);
 const d = (name, fallback) => __ENV[name] || fallback;
-const baseline = n('BASELINE_RPS', 5);
-const peak = n('PEAK_RPS', Math.max(10, baseline * 3));
-const limit = n('LIMIT_RPS', peak * 4);
+const baseline = n('BASELINE_RATE', n('BASELINE_RPS', 5));
+const peak = n('PEAK_RATE', n('PEAK_RPS', Math.max(10, baseline * 3)));
+const limit = n('LIMIT_RATE', n('LIMIT_RPS', peak * 4));
 const pre = n('PRE_ALLOCATED_VUS', 20);
 const max = n('MAX_VUS', 100);
 const arrivalBase = { timeUnit: '1s', preAllocatedVUs: pre, maxVUs: max };
