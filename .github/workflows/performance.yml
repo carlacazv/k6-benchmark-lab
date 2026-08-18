@@ -7,9 +7,13 @@ on:
   workflow_dispatch:
     inputs:
       scenario:
-        description: 'smoke|baseline|load|stress|spike|soak|breakpoint'
+        description: 'auto|smoke|baseline|load|stress|spike|soak|breakpoint'
         required: false
-        default: 'smoke'
+        default: 'auto'
+      plan:
+        description: 'Repository path to the performance plan'
+        required: false
+        default: 'performance-test-plan.yaml'
 
 permissions:
   contents: read
@@ -17,22 +21,11 @@ permissions:
 jobs:
   performance:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 75
     env:
-      TARGET_BASE_URL: http://127.0.0.1:3000
-      SCENARIO: ${{ github.event.inputs.scenario || 'smoke' }}
-      NFR_P95_MS: '500'
-      NFR_P99_MS: '1000'
-      ERROR_RATE_THRESHOLD: '0.01'
-      CHECK_RATE_THRESHOLD: '0.99'
-      APDEX_T_MS: '500'
-      APDEX_MIN: '0.85'
-      BASELINE_RPS: '5'
-      PEAK_RPS: '15'
-      LIMIT_RPS: '60'
-      PRE_ALLOCATED_VUS: '20'
-      MAX_VUS: '100'
-      SMOKE_ITERATIONS: '3'
+      PERFORMANCE_PLAN: ${{ github.event.inputs.plan || 'performance-test-plan.yaml' }}
+      SCENARIO_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.scenario || 'smoke' }}
+      K6_REPORT_DIR: artifacts/manual
       BROWSER_ITERATIONS: '2'
     steps:
       - uses: actions/checkout@v6
@@ -43,9 +36,16 @@ jobs:
         with:
           k6-version: '2.2.0'
           browser: true
-      - name: Verify analyzer
-        run: npm run test:analyzer
+      - name: Verify framework logic
+        run: npm test
+      - name: Performance readiness gate
+        id: readiness
+        continue-on-error: true
+        run: |
+          node scripts/readiness.mjs "$PERFORMANCE_PLAN" --scenario "$SCENARIO_OVERRIDE" --out-dir artifacts/readiness
+          cat artifacts/readiness/runtime.env >> "$GITHUB_ENV"
       - name: Start controlled target
+        if: steps.readiness.outcome == 'success'
         run: |
           node lab-app/server.mjs > /tmp/lab.log 2>&1 &
           echo $! > /tmp/lab.pid
@@ -53,16 +53,19 @@ jobs:
           curl -fsS http://127.0.0.1:3000/__config
       - name: REST performance
         id: rest
+        if: steps.readiness.outcome == 'success'
         continue-on-error: true
         env: { K6_REPORT_DIR: artifacts/rest }
         run: mkdir -p artifacts/rest && k6 run tests/rest/performance.js
       - name: GraphQL performance
         id: graphql
+        if: steps.readiness.outcome == 'success'
         continue-on-error: true
         env: { K6_REPORT_DIR: artifacts/graphql }
         run: mkdir -p artifacts/graphql && k6 run tests/graphql/performance.js
       - name: Frontend performance
         id: browser
+        if: steps.readiness.outcome == 'success'
         continue-on-error: true
         env:
           K6_REPORT_DIR: artifacts/browser
@@ -70,14 +73,14 @@ jobs:
         run: mkdir -p artifacts/browser && k6 run tests/browser/performance.js
       - name: Generate evidence-based diagnosis
         id: diagnosis
-        if: always()
+        if: always() && steps.readiness.outcome == 'success'
         continue-on-error: true
         run: node scripts/analyze-results.mjs artifacts artifacts/performance-diagnosis.md artifacts/performance-diagnosis.json
       - name: Capture environment evidence
         if: always()
         run: |
           mkdir -p artifacts/evidence
-          { echo '# Runner'; uname -a; echo; echo '# CPU'; lscpu; echo; echo '# Memory'; free -h; echo; echo '# Lab config'; curl -fsS http://127.0.0.1:3000/__config || true; echo; echo '# Lab metrics'; curl -fsS http://127.0.0.1:3000/metrics || true; echo; echo '# Lab stdout'; cat /tmp/lab.log || true; } > artifacts/evidence/environment.txt
+          { echo '# Runner'; uname -a; echo; echo '# CPU'; lscpu; echo; echo '# Memory'; free -h; echo; echo '# Performance plan'; cat "$PERFORMANCE_PLAN" || true; echo; echo '# Readiness'; cat artifacts/readiness/readiness-report.md || true; echo; echo '# Lab config'; curl -fsS http://127.0.0.1:3000/__config || true; echo; echo '# Lab metrics'; curl -fsS http://127.0.0.1:3000/metrics || true; echo; echo '# Lab stdout'; cat /tmp/lab.log || true; } > artifacts/evidence/environment.txt
       - name: Upload performance evidence
         if: always()
         uses: actions/upload-artifact@v6
@@ -88,6 +91,7 @@ jobs:
       - name: Quality gate
         if: always()
         run: |
+          test '${{ steps.readiness.outcome }}' = 'success'
           test '${{ steps.rest.outcome }}' = 'success'
           test '${{ steps.graphql.outcome }}' = 'success'
           test '${{ steps.browser.outcome }}' = 'success'
