@@ -1,0 +1,30 @@
+schemaVersion: 1
+experiment:
+  id: error-rate
+  hypothesis: "Increasing the controlled synthetic failure probability increases HTTP request failure rate under the same workload."
+  protocol: rest
+  trials: 3
+  environment:
+    LAB_BASE_LATENCY_MS: 15
+    LAB_JITTER_MS: 0
+    LAB_DEPENDENCY_LATENCY_MS: 0
+    LAB_DB_WAIT_MS: 0
+    LAB_CPU_BURN_MS: 0
+    LAB_ERROR_RATE: 0
+  intervention:
+    variable: LAB_ERROR_RATE
+    control: 0
+    treatment: 0.3
+  workload:
+    vus: 4
+    iterations: 80
+  expected:
+    metric: error_rate
+    direction: increase
+    minimumRelativeChange: 0
+    minimumAbsoluteChange: 0.15
+    requiredConsistency: 0.67
+  safety:
+    target: local
+    maxTreatmentValue: 1
+    maxDurationSeconds: 30

@@ -12,8 +12,10 @@ A performance-engineering learning lab for QAs who need to discover production d
 6. Capture granular k6 points plus the exact UTC test window.
 7. Query application/infrastructure telemetry for the same window with pre/post padding.
 8. Compare pre/during/post behavior and compute time-aligned/lagged correlations.
-9. Produce evidence-backed bottleneck hypotheses, then validate them with traces/logs and controlled experiments.
-10. Preserve discovery, readiness, raw k6, telemetry correlation, diagnosis and environment facts as CI evidence.
+9. Produce evidence-backed bottleneck hypotheses.
+10. Validate selected hypotheses with paired controlled experiments that change one variable at a time.
+11. Classify experimental evidence as `SUPPORTED`, `CONTRADICTED` or `INCONCLUSIVE` without claiming causal proof.
+12. Preserve discovery, readiness, raw k6, telemetry correlation, diagnosis, experiment and environment facts as CI evidence.
 
 Read `docs/` in numeric order before running anything above smoke.
 
@@ -45,7 +47,7 @@ Discovery writes `workload-profile.json`, `workload-profile.md` and `plan-volume
 
 ## Phase 4: Post-Test Telemetry Correlation
 
-Every k6 adapter now runs through `scripts/run-k6-with-window.mjs`. Besides the existing `summary.json`, it records:
+Every k6 adapter runs through `scripts/run-k6-with-window.mjs`. Besides the existing `summary.json`, it records:
 
 - `timeseries.json`: granular k6 points with timestamps;
 - `test-window.json`: exact UTC start/end, protocol, scenario, target and exit code.
@@ -65,6 +67,38 @@ Supported post-test sources:
 The engine compares pre-test, during-test and post-test behavior; evaluates threshold overlap; computes Pearson correlation with latency/error/iteration rate; searches configured lag buckets; and emits diagnostic hypotheses for roles such as CPU, memory, DB pool/wait, dependency latency, cache hit ratio and autoscaling replicas.
 
 **Correlation is never labelled root cause.** The report always keeps hypotheses separate from causal proof.
+
+## Phase 5: Controlled Experiments & RCA Validation
+
+Phase 5 turns a hypothesis into a paired experiment:
+
+```text
+same workload
+    |
+    +--> control -----------+
+    |                       |
+    +--> one-variable treatment
+                            |
+                            v
+              paired deltas + repeated trials
+                            |
+                            v
+        SUPPORTED / CONTRADICTED / INCONCLUSIVE
+```
+
+The local lab now exposes controlled knobs for base latency, simulated downstream latency, simulated DB wait, CPU work and error probability. Experiment plans live in `experiments/`.
+
+Run the default dependency-latency experiment:
+
+```bash
+mise run experiment
+```
+
+The runner executes at least three paired trials, alternates AB/BA order, keeps workload constant, evaluates both absolute and relative materiality and requires repeated directional consistency. `SUPPORTED` means the controlled intervention repeatedly produced the expected effect **under this lab workload**; it does not mean production causality is proven.
+
+The experiment runner rejects remote targets and arbitrary environment variables. Fault injection is limited to the repository-owned local lab with explicit intensity, VU, iteration and duration ceilings.
+
+See `docs/15-controlled-experiments.md`.
 
 ## Discovery feeds readiness
 
@@ -106,6 +140,8 @@ Telemetry configs store only names of credential env vars, never secret values. 
 
 PR/push pipelines still execute only `smoke`, even if the objective recommends `load`. Manual `workflow_dispatch` can select `auto` after discovery/readiness. Aggressive tests belong only on infrastructure you own or are explicitly authorized to test.
 
+The Phase 5 CI experiment is a separate short local-only validation. Its treatment is intentionally degraded, so its measurement workload does not use performance NFR thresholds; the gate validates experimental integrity and the known expected classification instead.
+
 A smoke run can collect correlation evidence but may legitimately report that there are too few matched buckets for a statistical claim. Longer baseline/load/stress/soak runs are where temporal diagnosis becomes useful.
 
 ## Architecture
@@ -122,6 +158,13 @@ Performance plan -> Readiness policy -> Runtime env -> k6
 Post-test telemetry query -> time alignment -> correlation/lag -> RCA hypotheses
                                                                   |
                                                                   v
+                                                     controlled experiment
+                                                       control / treatment
+                                                                  |
+                                                                  v
+                                         supported / contradicted / inconclusive
+                                                                  |
+                                                                  v
                                                              CI evidence
 ```
 
@@ -136,6 +179,7 @@ GitHub Actions uploads:
 - per-protocol `summary.json`, `timeseries.json` and `test-window.json`;
 - post-test telemetry correlation Markdown/JSON;
 - performance diagnosis Markdown/JSON;
+- controlled experiment plans, per-trial summaries/logs and experiment report;
 - runner/target evidence.
 
 Failures still leave artifacts explaining why the run failed or was blocked.

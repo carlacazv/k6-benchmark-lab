@@ -4,10 +4,11 @@ requested_scenario="${1:-auto}"
 plan="${PERFORMANCE_PLAN:-performance-test-plan.yaml}"
 discovery_config="${TELEMETRY_DISCOVERY_CONFIG:-telemetry-discovery.yaml}"
 correlation_config="${TELEMETRY_CORRELATION_CONFIG:-telemetry-correlation.yaml}"
+experiment_config="${EXPERIMENT_CONFIG:-experiments/dependency-latency.yaml}"
 readiness_dir="artifacts/readiness"
 discovery_dir="artifacts/discovery"
 
-mkdir -p "$readiness_dir" "$discovery_dir" artifacts/rest artifacts/graphql artifacts/browser artifacts/correlation
+mkdir -p "$readiness_dir" "$discovery_dir" artifacts/rest artifacts/graphql artifacts/browser artifacts/correlation artifacts/experiments
 
 if [[ "${RUN_TELEMETRY_DISCOVERY:-1}" == "1" ]]; then
   node scripts/discover.mjs "$discovery_config" --out-dir "$discovery_dir" || exit 1
@@ -26,4 +27,7 @@ K6_BROWSER_HEADLESS="${K6_BROWSER_HEADLESS:-true}" node scripts/run-k6-with-wind
 
 node scripts/correlate.mjs "$correlation_config" --artifacts artifacts --out-dir artifacts/correlation || status=1
 node scripts/analyze-results.mjs artifacts artifacts/performance-diagnosis.md artifacts/performance-diagnosis.json || status=1
+if [[ "${RUN_CONTROLLED_EXPERIMENT:-1}" == "1" ]]; then
+  node scripts/experiment.mjs "$experiment_config" --out-dir artifacts/experiments/default --require-supported || status=1
+fi
 exit "$status"
