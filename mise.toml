@@ -10,6 +10,9 @@ PERFORMANCE_PLAN = "performance-test-plan.yaml"
 TELEMETRY_DISCOVERY_CONFIG = "telemetry-discovery.yaml"
 TELEMETRY_CORRELATION_CONFIG = "telemetry-correlation.yaml"
 EXPERIMENT_CONFIG = "experiments/dependency-latency.yaml"
+OBSERVABILITY_CORRELATION_CONFIG = "observability-correlation.yaml"
+PROMETHEUS_CONFIG = "observability/prometheus.yml"
+PROMETHEUS_IMAGE = "prom/prometheus:v3.5.0"
 
 [tasks.setup]
 description = "Install pinned toolchain"
@@ -47,6 +50,14 @@ run = "node scripts/correlate.mjs ${TELEMETRY_CORRELATION_CONFIG} --artifacts ar
 description = "Run a paired controlled performance experiment and classify the RCA hypothesis"
 run = "node scripts/experiment.mjs ${EXPERIMENT_CONFIG} --out-dir artifacts/experiments/manual"
 
+[tasks.observability]
+description = "Validate k6 -> real Prometheus telemetry -> correlation -> hypothesis in the owned lab (requires Docker)"
+run = "node scripts/observability-validation.mjs ${OBSERVABILITY_CORRELATION_CONFIG} --out-dir artifacts/observability"
+
+[tasks.validate-chain]
+description = "Align the real telemetry hypothesis with the separate controlled experiment evidence"
+run = "node scripts/validate-evidence-chain.mjs artifacts/observability/correlation/telemetry-correlation.json artifacts/experiments/default/experiment-report.json --out-dir artifacts/observability"
+
 [tasks.analyze]
 description = "Generate diagnosis from k6 summary artifacts"
 run = "node scripts/analyze-results.mjs artifacts artifacts/performance-diagnosis.md artifacts/performance-diagnosis.json"
@@ -56,9 +67,13 @@ description = "Discover telemetry, run readiness, execute k6, correlate telemetr
 run = "bash scripts/run-suite.sh auto"
 
 [tasks.ci-smoke]
-description = "Run discovery + readiness + safe smoke + correlation + controlled experiment + diagnosis"
+description = "Run discovery + readiness + safe smoke + synthetic correlation + controlled experiment + diagnosis"
 run = "bash scripts/run-suite.sh smoke"
 
+[tasks.full-validation]
+description = "Run the safe smoke path plus real Prometheus observability and evidence-chain validation (requires Docker)"
+run = "RUN_REAL_OBSERVABILITY=1 bash scripts/run-suite.sh smoke"
+
 [tasks.test]
-description = "Run analyzer, readiness, telemetry-discovery, correlation and experiment tests"
+description = "Run analyzer, readiness, telemetry-discovery, correlation, experiment and observability tests"
 run = "npm test"

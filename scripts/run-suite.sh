@@ -5,10 +5,11 @@ plan="${PERFORMANCE_PLAN:-performance-test-plan.yaml}"
 discovery_config="${TELEMETRY_DISCOVERY_CONFIG:-telemetry-discovery.yaml}"
 correlation_config="${TELEMETRY_CORRELATION_CONFIG:-telemetry-correlation.yaml}"
 experiment_config="${EXPERIMENT_CONFIG:-experiments/dependency-latency.yaml}"
+observability_config="${OBSERVABILITY_CORRELATION_CONFIG:-observability-correlation.yaml}"
 readiness_dir="artifacts/readiness"
 discovery_dir="artifacts/discovery"
 
-mkdir -p "$readiness_dir" "$discovery_dir" artifacts/rest artifacts/graphql artifacts/browser artifacts/correlation artifacts/experiments
+mkdir -p "$readiness_dir" "$discovery_dir" artifacts/rest artifacts/graphql artifacts/browser artifacts/correlation artifacts/experiments artifacts/observability
 
 if [[ "${RUN_TELEMETRY_DISCOVERY:-1}" == "1" ]]; then
   node scripts/discover.mjs "$discovery_config" --out-dir "$discovery_dir" || exit 1
@@ -29,5 +30,9 @@ node scripts/correlate.mjs "$correlation_config" --artifacts artifacts --out-dir
 node scripts/analyze-results.mjs artifacts artifacts/performance-diagnosis.md artifacts/performance-diagnosis.json || status=1
 if [[ "${RUN_CONTROLLED_EXPERIMENT:-1}" == "1" ]]; then
   node scripts/experiment.mjs "$experiment_config" --out-dir artifacts/experiments/default --require-supported || status=1
+fi
+if [[ "${RUN_REAL_OBSERVABILITY:-0}" == "1" ]]; then
+  node scripts/observability-validation.mjs "$observability_config" --out-dir artifacts/observability || status=1
+  node scripts/validate-evidence-chain.mjs artifacts/observability/correlation/telemetry-correlation.json artifacts/experiments/default/experiment-report.json --out-dir artifacts/observability --require-aligned || status=1
 fi
 exit "$status"

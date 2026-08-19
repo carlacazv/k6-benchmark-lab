@@ -1,6 +1,6 @@
 {
   "name": "k6-benchmark-lab",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -12,12 +12,15 @@
     "readiness": "node scripts/readiness.mjs performance-test-plan.yaml --scenario auto --out-dir artifacts/readiness",
     "correlate": "node scripts/correlate.mjs telemetry-correlation.yaml --artifacts artifacts --out-dir artifacts/correlation",
     "experiment": "node scripts/experiment.mjs experiments/dependency-latency.yaml --out-dir artifacts/experiments/dependency-latency",
+    "observability": "node scripts/observability-validation.mjs observability-correlation.yaml --out-dir artifacts/observability",
+    "validate:chain": "node scripts/validate-evidence-chain.mjs artifacts/observability/correlation/telemetry-correlation.json artifacts/experiments/default/experiment-report.json --out-dir artifacts/observability",
     "analyze": "node scripts/analyze-results.mjs artifacts artifacts/performance-diagnosis.md artifacts/performance-diagnosis.json",
     "test:analyzer": "node scripts/analyze-results.test.mjs",
     "test:readiness": "node scripts/readiness.test.mjs",
     "test:discovery": "node scripts/discover.test.mjs && node scripts/discovery-readiness.test.mjs",
     "test:correlation": "node scripts/run-k6-with-window.test.mjs && node scripts/correlate.test.mjs",
     "test:experiment": "node scripts/experiment.test.mjs",
-    "test": "npm run test:analyzer && npm run test:readiness && npm run test:discovery && npm run test:correlation && npm run test:experiment"
+    "test:observability": "node lab-app/schedule.test.mjs && node lab-app/metrics.test.mjs && node scripts/lib/evidence-chain.test.mjs",
+    "test": "npm run test:analyzer && npm run test:readiness && npm run test:discovery && npm run test:correlation && npm run test:experiment && npm run test:observability"
   }
 }
