@@ -22,6 +22,10 @@ on:
         description: 'Repository path to post-test telemetry correlation config'
         required: false
         default: 'telemetry-correlation.yaml'
+      experiment_config:
+        description: 'Repository path to a controlled local experiment config'
+        required: false
+        default: 'experiments/dependency-latency.yaml'
 
 permissions:
   contents: read
@@ -34,6 +38,7 @@ jobs:
       PERFORMANCE_PLAN: ${{ github.event.inputs.plan || 'performance-test-plan.yaml' }}
       TELEMETRY_DISCOVERY_CONFIG: ${{ github.event.inputs.telemetry_config || 'telemetry-discovery.yaml' }}
       TELEMETRY_CORRELATION_CONFIG: ${{ github.event.inputs.correlation_config || 'telemetry-correlation.yaml' }}
+      EXPERIMENT_CONFIG: ${{ github.event.inputs.experiment_config || 'experiments/dependency-latency.yaml' }}
       SCENARIO_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.scenario || 'smoke' }}
       K6_REPORT_DIR: artifacts/manual
       BROWSER_ITERATIONS: '2'
@@ -93,11 +98,16 @@ jobs:
         if: always() && steps.readiness.outcome == 'success'
         continue-on-error: true
         run: node scripts/analyze-results.mjs artifacts artifacts/performance-diagnosis.md artifacts/performance-diagnosis.json
+      - name: Validate controlled RCA experiment
+        id: experiment
+        if: always() && steps.readiness.outcome == 'success'
+        continue-on-error: true
+        run: node scripts/experiment.mjs "$EXPERIMENT_CONFIG" --out-dir artifacts/experiments/default --require-supported
       - name: Capture environment evidence
         if: always()
         run: |
           mkdir -p artifacts/evidence
-          { echo '# Runner'; uname -a; echo; echo '# CPU'; lscpu; echo; echo '# Memory'; free -h; echo; echo '# Telemetry discovery'; cat artifacts/discovery/workload-profile.md || true; echo; echo '# Performance plan'; cat "$PERFORMANCE_PLAN" || true; echo; echo '# Readiness'; cat artifacts/readiness/readiness-report.md || true; echo; echo '# Telemetry correlation'; cat artifacts/correlation/telemetry-correlation.md || true; echo; echo '# Lab config'; curl -fsS http://127.0.0.1:3000/__config || true; echo; echo '# Lab metrics'; curl -fsS http://127.0.0.1:3000/metrics || true; echo; echo '# Lab stdout'; cat /tmp/lab.log || true; } > artifacts/evidence/environment.txt
+          { echo '# Runner'; uname -a; echo; echo '# CPU'; lscpu; echo; echo '# Memory'; free -h; echo; echo '# Telemetry discovery'; cat artifacts/discovery/workload-profile.md || true; echo; echo '# Performance plan'; cat "$PERFORMANCE_PLAN" || true; echo; echo '# Readiness'; cat artifacts/readiness/readiness-report.md || true; echo; echo '# Telemetry correlation'; cat artifacts/correlation/telemetry-correlation.md || true; echo; echo '# Controlled experiment'; cat artifacts/experiments/default/experiment-report.md || true; echo; echo '# Lab config'; curl -fsS http://127.0.0.1:3000/__config || true; echo; echo '# Lab metrics'; curl -fsS http://127.0.0.1:3000/metrics || true; echo; echo '# Lab stdout'; cat /tmp/lab.log || true; } > artifacts/evidence/environment.txt
       - name: Upload performance evidence
         if: always()
         uses: actions/upload-artifact@v6
@@ -115,3 +125,4 @@ jobs:
           test '${{ steps.browser.outcome }}' = 'success'
           test '${{ steps.correlation.outcome }}' = 'success'
           test '${{ steps.diagnosis.outcome }}' = 'success'
+          test '${{ steps.experiment.outcome }}' = 'success'

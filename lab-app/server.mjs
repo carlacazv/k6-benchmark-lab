@@ -4,6 +4,8 @@ import { performance } from 'node:perf_hooks';
 const port = Number(process.env.PORT ?? 3000);
 const baseLatency = Number(process.env.LAB_BASE_LATENCY_MS ?? 20);
 const jitter = Number(process.env.LAB_JITTER_MS ?? 30);
+const dependencyLatency = Number(process.env.LAB_DEPENDENCY_LATENCY_MS ?? 0);
+const dbWait = Number(process.env.LAB_DB_WAIT_MS ?? 0);
 const errorRate = Number(process.env.LAB_ERROR_RATE ?? 0);
 const cpuBurnMs = Number(process.env.LAB_CPU_BURN_MS ?? 0);
 let requests = 0;
@@ -20,6 +22,8 @@ function burnCpu(ms) {
 async function simulateWork() {
   const wait = baseLatency + Math.random() * jitter;
   if (wait > 0) await sleep(wait);
+  if (dependencyLatency > 0) await sleep(dependencyLatency);
+  if (dbWait > 0) await sleep(dbWait);
   if (cpuBurnMs > 0) burnCpu(cpuBurnMs);
 }
 function json(res, status, body) {
@@ -45,14 +49,15 @@ const server = http.createServer(async (req, res) => {
   requests += 1;
   const url = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`);
   if (url.pathname === '/health') return json(res, 200, { status: 'ok' });
-  if (url.pathname === '/__config') return json(res, 200, { baseLatency, jitter, errorRate, cpuBurnMs, pid: process.pid });
+  if (url.pathname === '/__config') return json(res, 200, { baseLatency, jitter, dependencyLatency, dbWait, errorRate, cpuBurnMs, pid: process.pid });
   if (url.pathname === '/metrics') {
     const mem = process.memoryUsage();
+    const cpu = process.cpuUsage();
     res.writeHead(200, { 'content-type': 'text/plain; version=0.0.4' });
-    return res.end(`lab_requests_total ${requests}\nlab_errors_total ${errors}\nprocess_resident_memory_bytes ${mem.rss}\nprocess_uptime_seconds ${(Date.now()-startedAt)/1000}\n`);
+    return res.end(`lab_requests_total ${requests}\nlab_errors_total ${errors}\nprocess_resident_memory_bytes ${mem.rss}\nprocess_cpu_user_seconds_total ${cpu.user / 1_000_000}\nprocess_cpu_system_seconds_total ${cpu.system / 1_000_000}\nprocess_uptime_seconds ${(Date.now()-startedAt)/1000}\n`);
   }
   await simulateWork();
-  if (Math.random() < errorRate) { errors += 1; return json(res, 503, { error: 'synthetic dependency saturation' }); }
+  if (Math.random() < errorRate) { errors += 1; return json(res, 503, { error: 'controlled synthetic failure' }); }
   if (req.method === 'GET' && url.pathname === '/api/products') {
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit') ?? 20)));
     return json(res, 200, { items: products.slice(0, limit), total: products.length });
@@ -69,5 +74,5 @@ const server = http.createServer(async (req, res) => {
   return json(res, 404, { error: 'not found' });
 });
 
-server.listen(port, '0.0.0.0', () => console.log(JSON.stringify({ event: 'lab_started', port, baseLatency, jitter, errorRate, cpuBurnMs })));
+server.listen(port, '0.0.0.0', () => console.log(JSON.stringify({ event: 'lab_started', port, baseLatency, jitter, dependencyLatency, dbWait, errorRate, cpuBurnMs })));
 for (const signal of ['SIGTERM','SIGINT']) process.on(signal, () => server.close(() => process.exit(0)));

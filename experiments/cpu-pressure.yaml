@@ -1,0 +1,30 @@
+schemaVersion: 1
+experiment:
+  id: cpu-pressure
+  hypothesis: "Increasing CPU work per request increases REST p95 under the same workload."
+  protocol: rest
+  trials: 3
+  environment:
+    LAB_BASE_LATENCY_MS: 15
+    LAB_JITTER_MS: 0
+    LAB_DEPENDENCY_LATENCY_MS: 0
+    LAB_DB_WAIT_MS: 0
+    LAB_CPU_BURN_MS: 0
+    LAB_ERROR_RATE: 0
+  intervention:
+    variable: LAB_CPU_BURN_MS
+    control: 0
+    treatment: 25
+  workload:
+    vus: 4
+    iterations: 40
+  expected:
+    metric: p95_ms
+    direction: increase
+    minimumRelativeChange: 0.3
+    minimumAbsoluteChange: 15
+    requiredConsistency: 0.67
+  safety:
+    target: local
+    maxTreatmentValue: 50
+    maxDurationSeconds: 30
