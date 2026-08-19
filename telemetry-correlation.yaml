@@ -1,0 +1,51 @@
+version: 1
+required: true
+
+source:
+  type: synthetic
+  note: CI-only deterministic telemetry. Replace with prometheus, datadog or file for real diagnosis.
+
+analysis:
+  bucketSeconds: 1
+  prePaddingSeconds: 10
+  postPaddingSeconds: 10
+  minimumMatchedBuckets: 6
+  strongCorrelation: 0.65
+  maxLagBuckets: 3
+  saturationFraction: 0.20
+  memoryGrowthFraction: 0.10
+
+signals:
+  cpu:
+    role: cpu_utilization
+    unit: ratio
+    threshold: 0.85
+    aggregation: avg
+  memory:
+    role: memory_utilization
+    unit: ratio
+    threshold: 0.90
+    aggregation: avg
+  dbPool:
+    role: db_pool_utilization
+    unit: ratio
+    threshold: 0.85
+    aggregation: avg
+  dbWait:
+    role: db_wait_ms
+    unit: ms
+    aggregation: avg
+  dependencyLatency:
+    role: dependency_latency_ms
+    unit: ms
+    aggregation: avg
+  cacheHit:
+    role: cache_hit_ratio
+    unit: ratio
+    threshold: 0.80
+    direction: below
+    aggregation: avg
+  replicas:
+    role: replicas
+    unit: count
+    aggregation: max

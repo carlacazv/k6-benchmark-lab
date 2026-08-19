@@ -9,9 +9,11 @@ A performance-engineering learning lab for QAs who need to discover production d
 3. Define or confirm non-functional acceptance criteria.
 4. Let the readiness engine consume the discovery profile, compare PRD vs TEST and recommend the scenario.
 5. Execute REST, GraphQL or browser adapters only after the readiness gate passes.
-6. Analyze p95/p99, errors, throughput, dropped iterations, Apdex and Core Web Vitals.
-7. Correlate hypotheses with application/infrastructure telemetry.
-8. Preserve discovery, readiness, raw summaries, diagnosis and environment facts as CI evidence.
+6. Capture granular k6 points plus the exact UTC test window.
+7. Query application/infrastructure telemetry for the same window with pre/post padding.
+8. Compare pre/during/post behavior and compute time-aligned/lagged correlations.
+9. Produce evidence-backed bottleneck hypotheses, then validate them with traces/logs and controlled experiments.
+10. Preserve discovery, readiness, raw k6, telemetry correlation, diagnosis and environment facts as CI evidence.
 
 Read `docs/` in numeric order before running anything above smoke.
 
@@ -41,6 +43,29 @@ OpenTelemetry is handled at the storage backend: OTLP/Collector exports data to 
 
 Discovery writes `workload-profile.json`, `workload-profile.md` and `plan-volume-suggestion.yaml`. The profile includes coverage/confidence, p50/p75/p95/p99/max, busiest UTC hours, volatility, exceptional intervals and recommended baseline/observed peak. Exceptional events are surfaced for human review and are not silently promoted into the normal capacity requirement.
 
+## Phase 4: Post-Test Telemetry Correlation
+
+Every k6 adapter now runs through `scripts/run-k6-with-window.mjs`. Besides the existing `summary.json`, it records:
+
+- `timeseries.json`: granular k6 points with timestamps;
+- `test-window.json`: exact UTC start/end, protocol, scenario, target and exit code.
+
+`mise run correlate` reads those artifacts and `telemetry-correlation.yaml`, queries the matching telemetry window and writes:
+
+- `artifacts/correlation/telemetry-correlation.md`
+- `artifacts/correlation/telemetry-correlation.json`
+
+Supported post-test sources:
+
+- `synthetic`: deterministic CI-only correlation evidence;
+- `prometheus`: one range query per configured signal;
+- `datadog`: one timeseries query per configured signal;
+- `file`: exported historical telemetry.
+
+The engine compares pre-test, during-test and post-test behavior; evaluates threshold overlap; computes Pearson correlation with latency/error/iteration rate; searches configured lag buckets; and emits diagnostic hypotheses for roles such as CPU, memory, DB pool/wait, dependency latency, cache hit ratio and autoscaling replicas.
+
+**Correlation is never labelled root cause.** The report always keeps hypotheses separate from causal proof.
+
 ## Discovery feeds readiness
 
 ```yaml
@@ -52,28 +77,65 @@ volume:
 
 When loaded, discovered baseline/peak supersede manual fallback values. Non-smoke execution is blocked when a required profile is missing, incompatible, malformed or below the configured confidence floor.
 
+## Correlation configuration
+
+```yaml
+analysis:
+  bucketSeconds: 5
+  minimumMatchedBuckets: 12
+  strongCorrelation: 0.65
+  maxLagBuckets: 6
+
+signals:
+  cpu:
+    role: cpu_utilization
+    unit: ratio
+    threshold: 0.85
+    query: YOUR_PROVIDER_QUERY
+```
+
+The signal `role` drives diagnostic meaning; the provider-specific query stays configurable.
+
+For Prometheus/Datadog, `seriesAggregation` supports `sum|avg|max|min`. This matters when a query returns one series per pod/host.
+
 ## Credentials
 
-Telemetry config stores only names of credential env vars, never secret values. Prometheus supports `none`, `bearer` and `basic`; Datadog uses API/application keys from env vars.
+Telemetry configs store only names of credential env vars, never secret values. Prometheus supports `none`, `bearer` and `basic`; Datadog uses API/application keys from env vars.
 
 ## Safe default
 
 PR/push pipelines still execute only `smoke`, even if the objective recommends `load`. Manual `workflow_dispatch` can select `auto` after discovery/readiness. Aggressive tests belong only on infrastructure you own or are explicitly authorized to test.
 
+A smoke run can collect correlation evidence but may legitimately report that there are too few matched buckets for a statistical claim. Longer baseline/load/stress/soak runs are where temporal diagnosis becomes useful.
+
 ## Architecture
 
 ```text
-Telemetry adapters -> Production profiler -> Workload profile
-                                      |
-                                      v
-Performance plan -> Readiness policy engine -> Runtime env -> k6 adapters
-                                                     |
-                                                     v
-                                               Diagnosis/evidence
+Production telemetry -> Workload discovery -> Workload profile
+                                            |
+                                            v
+Performance plan -> Readiness policy -> Runtime env -> k6
+                                                   |
+                                                   +--> granular k6 time series + exact window
+                                                                  |
+                                                                  v
+Post-test telemetry query -> time alignment -> correlation/lag -> RCA hypotheses
+                                                                  |
+                                                                  v
+                                                             CI evidence
 ```
 
 The project remains Ports & Adapters + Strategy. Saga remains intentionally out of scope.
 
 ## CI evidence
 
-GitHub Actions uploads telemetry discovery profile, readiness Markdown/JSON/runtime env, raw k6 summaries, diagnosis Markdown/JSON and runner/target evidence. Failures still leave artifacts explaining why the run failed or was blocked.
+GitHub Actions uploads:
+
+- telemetry discovery profile;
+- readiness Markdown/JSON/runtime env;
+- per-protocol `summary.json`, `timeseries.json` and `test-window.json`;
+- post-test telemetry correlation Markdown/JSON;
+- performance diagnosis Markdown/JSON;
+- runner/target evidence.
+
+Failures still leave artifacts explaining why the run failed or was blocked.
