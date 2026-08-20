@@ -1,0 +1,47 @@
+version: 1
+required: true
+
+source:
+  type: prometheus
+  baseUrl: http://127.0.0.1:9090
+  auth:
+    mode: none
+
+analysis:
+  bucketSeconds: 1
+  prePaddingSeconds: 3
+  postPaddingSeconds: 3
+  minimumMatchedBuckets: 12
+  strongCorrelation: 0.8
+  maxLagBuckets: 2
+  saturationFraction: 0.2
+  memoryGrowthFraction: 0.5
+
+signals:
+  dependencyLatency:
+    role: dependency_latency_ms
+    unit: ms
+    seriesAggregation: avg
+    query: lab_dependency_latency_milliseconds
+  dbWait:
+    role: db_wait_ms
+    unit: ms
+    seriesAggregation: avg
+    query: lab_db_wait_milliseconds
+  eventLoop:
+    role: event_loop_utilization
+    unit: ratio
+    threshold: 0.85
+    seriesAggregation: avg
+    query: lab_event_loop_utilization_ratio
+  cpu:
+    role: cpu_utilization
+    unit: ratio
+    threshold: 0.85
+    seriesAggregation: avg
+    query: 'rate(process_cpu_user_seconds_total[3s]) + rate(process_cpu_system_seconds_total[3s])'
+  processMemory:
+    role: process_memory_bytes
+    unit: bytes
+    seriesAggregation: avg
+    query: process_resident_memory_bytes
