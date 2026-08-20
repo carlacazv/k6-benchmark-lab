@@ -296,4 +296,8 @@ For the v1 learning path, start with [Start Here](docs/00-start-here.md) instead
 - [CHANGELOG.md](CHANGELOG.md)
 - [v1 Release Guide](docs/21-v1-release-guide.md)
 
-The repository intentionally does not choose a legal license on behalf of its owner. See the release guide before describing it as OSI-licensed open source.
+## License
+
+Licensed under the **Apache License, Version 2.0** (`Apache-2.0`). See [LICENSE](LICENSE) for the full terms and [NOTICE](NOTICE) for project attribution.
+
+Copyright 2026 Carla Cury Azevedo.

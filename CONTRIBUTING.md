@@ -138,6 +138,8 @@ Never commit:
 
 Use environment variables/secrets and anonymized fixtures.
 
-## Licensing note
+## License and contributions
 
-Contributions do not automatically define the repository's legal license. The repository owner must explicitly select and add a license before describing the project as OSI-licensed open source.
+The project is licensed under the **Apache License, Version 2.0** (`Apache-2.0`). See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
+
+Unless explicitly stated otherwise, contributions intentionally submitted for inclusion in the project are provided under the same Apache-2.0 terms, consistent with Section 5 of the license. Contributors retain the rights to their own original work while granting the permissions described by the project license.
