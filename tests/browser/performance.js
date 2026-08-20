@@ -7,9 +7,11 @@ import { recordApdex } from '../lib/apdex.js';
 import { summaryOutputs } from '../lib/summary.js';
 
 const userFlow = new Trend('browser_user_flow_duration', true);
+const defaultBrowserIterations = env.scenario === 'smoke' ? 1 : 2;
+
 export const options = {
   summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
-  scenarios: { browser: { executor: 'shared-iterations', vus: Number(__ENV.BROWSER_VUS || 1), iterations: Number(__ENV.BROWSER_ITERATIONS || 2), maxDuration: __ENV.BROWSER_MAX_DURATION || '1m', options: { browser: { type: 'chromium' } } } },
+  scenarios: { browser: { executor: 'shared-iterations', vus: Number(__ENV.BROWSER_VUS || 1), iterations: Number(__ENV.BROWSER_ITERATIONS || defaultBrowserIterations), maxDuration: __ENV.BROWSER_MAX_DURATION || '1m', options: { browser: { type: 'chromium' } } } },
   thresholds: browserThresholds(),
   tags: { protocol: 'browser', scenario: env.scenario },
 };

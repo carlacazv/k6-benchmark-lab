@@ -48,7 +48,6 @@ jobs:
       PROMETHEUS_IMAGE: prom/prometheus:v3.5.0
       SCENARIO_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.scenario || 'smoke' }}
       K6_REPORT_DIR: artifacts/manual
-      BROWSER_ITERATIONS: '2'
     steps:
       - uses: actions/checkout@v6
       - name: Install project toolchain with mise
