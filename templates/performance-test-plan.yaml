@@ -1,0 +1,62 @@
+# Copy this file to performance-test-plan.yaml and replace the example values.
+version: 1
+
+target:
+  name: your-service
+  baseUrl: http://127.0.0.1:3000
+  authorized: true
+
+objective:
+  # validate_expected_peak | characterize_baseline | explore_capacity | investigate_spike | investigate_endurance
+  type: validate_expected_peak
+
+volume:
+  unit: iterations_per_second
+  oneIterationModelsOneOperation: true
+  discoveryProfile: artifacts/discovery/workload-profile.json
+  # Set true after wiring real telemetry discovery. False lets the template run with fallback business values.
+  discoveryRequired: false
+  discoveryMinimumConfidence: MEDIUM
+  # Fallback business model when discovery is not required/available.
+  activeUsers: 1000
+  operationsPerUser: 3
+  observationWindowSeconds: 600
+  observedPeakRate: 15
+  headroomPercent: 25
+  # Safety/exploration bound only. This is NOT proven system capacity.
+  explorationCeilingMultiplier: 4
+
+environment:
+  comparisonMode: equivalent
+  minimumCapacityRatio: 1
+  production:
+    replicas: 2
+    cpuCoresPerReplica: 2
+    memoryMbPerReplica: 2048
+  test:
+    replicas: 2
+    cpuCoresPerReplica: 2
+    memoryMbPerReplica: 2048
+  configurationParity:
+    databaseTopologyEquivalent: true
+    cacheTopologyEquivalent: true
+    networkPathEquivalent: true
+    autoscalingEquivalent: true
+
+observability:
+  applicationMetrics: true
+  infrastructureMetrics: true
+  logs: true
+  traces: true
+  dependencyMetrics: true
+
+nfr:
+  p95Ms: 500
+  p99Ms: 1000
+  errorRate: 0.01
+  checkRate: 0.99
+  apdexTMs: 500
+  apdexMin: 0.85
+
+generator:
+  vuSafetyFactor: 1.5
