@@ -2,7 +2,7 @@
 
 All notable project milestones are documented here.
 
-## [1.0.0] — Release candidate
+## [1.0.0] — 2026-08-20
 
 ### Added — Performance execution foundation
 
@@ -73,6 +73,13 @@ All notable project milestones are documented here.
 - contribution guide;
 - roadmap;
 - release/docs QC.
+
+### Added — Licensing
+
+- Apache License, Version 2.0 (`Apache-2.0`);
+- repository-level `LICENSE` and `NOTICE`;
+- explicit project attribution to Carla Cury Azevedo;
+- automated release-QC validation for license metadata and files.
 
 ### Safety and interpretation
 

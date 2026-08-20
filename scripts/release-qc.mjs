@@ -25,6 +25,8 @@ function read(relativePath) {
 function assertRequiredFiles() {
   const required = [
     'README.md',
+    'LICENSE',
+    'NOTICE',
     'CONTRIBUTING.md',
     'ROADMAP.md',
     'CHANGELOG.md',
@@ -44,10 +46,33 @@ function assertRequiredFiles() {
   else ok('required public files', `${required.length} files present`);
 }
 
-function assertPackageVersion() {
+function assertPackageVersionAndLicense() {
   const pkg = JSON.parse(read('package.json'));
   if (pkg.version !== '1.0.0') fail('release version', `package.json version is ${pkg.version}; expected 1.0.0`);
   else ok('release version', '1.0.0');
+
+  if (pkg.license !== 'Apache-2.0') fail('package license', `package.json license is ${pkg.license ?? 'missing'}; expected Apache-2.0`);
+  else ok('package license', 'Apache-2.0');
+}
+
+function assertLicenseFiles() {
+  const license = read('LICENSE');
+  const notice = read('NOTICE');
+  const licenseMarkers = [
+    'Apache License',
+    'Version 2.0, January 2004',
+    'TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION',
+    'Grant of Patent License',
+    'END OF TERMS AND CONDITIONS',
+  ];
+  const missingLicenseMarkers = licenseMarkers.filter((marker) => !license.includes(marker));
+  if (missingLicenseMarkers.length) fail('Apache-2.0 license text', `missing markers: ${missingLicenseMarkers.join(', ')}`);
+  else ok('Apache-2.0 license text', 'full license markers present');
+
+  const noticeMarkers = ['k6 Benchmark Lab', 'Copyright 2026 Carla Cury Azevedo', 'Apache License, Version 2.0'];
+  const missingNoticeMarkers = noticeMarkers.filter((marker) => !notice.includes(marker));
+  if (missingNoticeMarkers.length) fail('NOTICE attribution', `missing markers: ${missingNoticeMarkers.join(', ')}`);
+  else ok('NOTICE attribution', 'project attribution present');
 }
 
 function markdownFiles() {
@@ -153,14 +178,19 @@ function assertProductLanguage() {
     'templates/',
     'Correlation is not causation',
     'smoke',
+    'Apache License, Version 2.0',
+    'Apache-2.0',
+    '[LICENSE](LICENSE)',
+    '[NOTICE](NOTICE)',
   ];
   const missing = requiredPhrases.filter((phrase) => !readme.includes(phrase));
   if (missing.length) fail('README product contract', `missing: ${missing.join(', ')}`);
-  else ok('README product contract', 'onboarding, templates and safety language present');
+  else ok('README product contract', 'onboarding, templates, safety and license language present');
 }
 
 assertRequiredFiles();
-assertPackageVersion();
+assertPackageVersionAndLicense();
+assertLicenseFiles();
 assertMarkdownLinks();
 assertTemplates();
 assertProductLanguage();

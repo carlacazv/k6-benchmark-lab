@@ -62,17 +62,19 @@ Before tagging the final merge, the GitHub Actions `performance-lab` workflow mu
 - [ ] The separate controlled experiment remains `SUPPORTED`.
 - [ ] Final evidence-chain status remains `ALIGNED`.
 
-## Licensing decision
+### Licensing
 
-This repository intentionally does **not** invent a legal license on behalf of the owner.
+- [x] License selected: **Apache License, Version 2.0** (`Apache-2.0`).
+- [x] Full license text is present in `LICENSE`.
+- [x] Project attribution is present in `NOTICE`.
+- [x] `package.json` declares `Apache-2.0`.
+- [x] README and CONTRIBUTING describe the license consistently.
 
-Before advertising the project as OSI-licensed "open source", the repository owner should explicitly choose and add a license (for example MIT or Apache-2.0 after reviewing the implications). Until then, the source is publicly visible but reuse rights are not automatically granted.
-
-This is the only v1 release item that is intentionally a human/legal decision rather than an engineering automation.
+The project may be described as open source under Apache-2.0 once this licensing change is merged. The license is permissive and includes explicit copyright, contribution and patent-license terms; the repository's `LICENSE` remains the authoritative legal text.
 
 ## Tagging
 
-After the final productization PR is merged and the release commit is green:
+After the final licensing change is merged and the resulting `main` commit is green:
 
 ```text
 v1.0.0
