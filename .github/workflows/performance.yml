@@ -3,7 +3,7 @@ name: performance-lab
 on:
   pull_request:
   push:
-    branches: [main, 'agent/**']
+    branches: [main]
   workflow_dispatch:
     inputs:
       scenario:
