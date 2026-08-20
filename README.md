@@ -1,240 +1,299 @@
 # k6 Benchmark Lab
 
-A performance-engineering learning lab for QAs who need to discover production demand, design safe tests, execute k6 workloads and diagnose results with evidence instead of guesswork.
+**A Performance Engineering decision model for QAs and SDETs — from production demand to evidence-backed bottleneck validation.**
 
-## Engineering workflow
+Most performance-testing examples start with a number of virtual users. This project starts earlier:
 
-1. Discover production workload from telemetry (`mise run discover`).
-2. Review data quality, baseline/peak percentiles, busy periods and exceptional events.
-3. Define or confirm non-functional acceptance criteria.
-4. Let the readiness engine consume the discovery profile, compare PRD vs TEST and recommend the scenario.
-5. Execute REST, GraphQL or browser adapters only after the readiness gate passes.
-6. Capture granular k6 points plus the exact UTC test window.
-7. Query application/infrastructure telemetry for the same window with pre/post padding.
-8. Compare pre/during/post behavior and compute time-aligned/lagged correlations.
-9. Produce evidence-backed bottleneck hypotheses.
-10. Validate selected hypotheses with paired controlled experiments that change one variable at a time.
-11. Classify experimental evidence as `SUPPORTED`, `CONTRADICTED` or `INCONCLUSIVE` without claiming causal proof.
-12. Validate the same reasoning path against real Prometheus telemetry in the owned lab.
-13. Align the real telemetry hypothesis with the separate experiment as `ALIGNED`, `PARTIAL` or `MISMATCH`.
-14. Preserve discovery, readiness, raw k6, telemetry correlation, diagnosis, experiment, observability and environment facts as CI evidence.
+> **How much load should we generate, which scenario answers the risk, and what evidence supports the conclusion?**
 
-Read `docs/` in numeric order before running anything above smoke.
+The model connects workload discovery, readiness, k6 execution, observability and controlled experimentation without treating correlation as root cause.
+
+## Start here
+
+New to the project? Read **[Start Here](docs/00-start-here.md)**.
+
+Then use:
+
+- **[QA Performance Engineering Playbook](docs/17-qa-performance-playbook.md)** — the end-to-end reasoning process;
+- **[Scenario Decision Tree](docs/18-scenario-decision-tree.md)** — smoke vs baseline vs load vs stress vs spike vs soak vs breakpoint;
+- **[End-to-End Walkthrough](docs/19-end-to-end-walkthrough.md)** — one complete worked workflow;
+- **[Troubleshooting](docs/20-troubleshooting.md)** — diagnose the framework without weakening evidence gates;
+- **[`templates/`](templates/)** — copy-ready performance plan, telemetry and experiment configuration.
+
+## The model
+
+```text
+business demand
+      |
+      v
+production telemetry ----> workload profile
+                              |
+                              v
+performance plan -------> readiness gate
+                              |
+                              v
+                        scenario selection
+                              |
+                              v
+                             k6
+                              |
+                +-------------+-------------+
+                |                           |
+                v                           v
+        exact test window             client symptoms
+                |                 p95/p99/errors/load
+                v                           |
+       aligned system telemetry <-----------+
+                |
+                v
+        correlation + lag
+                |
+                v
+        bottleneck hypothesis
+                |
+                v
+      controlled experiment
+       control / treatment
+                |
+                v
+SUPPORTED / CONTRADICTED / INCONCLUSIVE
+                |
+                v
+real telemetry + experiment alignment
+                |
+                v
+      ALIGNED / PARTIAL / MISMATCH
+```
+
+**Correlation is not causation.** The framework deliberately preserves that boundary at every stage.
+
+## What the project helps a QA answer
+
+### How much load should I generate?
+
+Use production telemetry or explicit business math to derive:
+
+- baseline demand;
+- observed peak;
+- design peak with approved headroom;
+- an exploration ceiling for controlled investigation.
+
+The exploration ceiling is **not** automatically system capacity. Breakpoint must be discovered through an agreed NFR/safety/resource violation.
+
+### Which test should I run?
+
+| Question | Scenario |
+|---|---|
+| Does the script/target basically work? | `smoke` |
+| What does representative normal busy traffic look like? | `baseline` |
+| Can the system meet NFR at expected design demand? | `load` |
+| What happens above expected demand? | `stress` |
+| What happens when demand jumps suddenly? | `spike` |
+| Does behavior degrade over time? | `soak` |
+| Where is the first controlled limit? | `breakpoint` |
+
+See the [Scenario Decision Tree](docs/18-scenario-decision-tree.md) before choosing by habit.
+
+### Is the environment ready?
+
+The readiness engine evaluates:
+
+- performance-plan completeness;
+- production workload discovery/confidence;
+- PRD vs TEST capacity/parity;
+- observability requirements;
+- scenario/objective compatibility;
+- initial VU estimates.
+
+Results are:
+
+- `READY`
+- `READY_WITH_WARNINGS`
+- `BLOCKED`
+
+### What failed — and why might it have failed?
+
+The analysis path separates:
+
+```text
+observation -> correlation -> hypothesis -> controlled validation
+```
+
+It uses evidence such as:
+
+- p95/p99;
+- error/check rate;
+- throughput and dropped iterations;
+- Apdex with sample sufficiency;
+- browser Web Vitals;
+- CPU/event loop;
+- memory;
+- DB pool/wait;
+- dependency latency;
+- cache behavior;
+- replicas/autoscaling;
+- temporal lag.
+
+A large absolute correlation with the wrong direction does not support a hypothesis.
 
 ## Quick start
 
+Prerequisite: [`mise`](https://mise.jdx.dev/).
+
 ```bash
 mise install
+mise run test
+mise run release-qc
+```
+
+Discover and evaluate the default controlled lab plan:
+
+```bash
 mise run discover
 mise run readiness
-mise run lab             # terminal 1
-mise run ci-smoke        # terminal 2, safe path without Docker observability
 ```
 
-Or let the plan choose the scenario after discovery: `mise run suite`.
+Start the owned lab:
 
-For the full owned-lab evidence chain, Docker is required:
+```bash
+mise run lab
+```
+
+In another terminal, run the safe path:
+
+```bash
+mise run ci-smoke
+```
+
+The ordinary PR/push path stays on **smoke**. It never silently escalates to load/stress/soak/breakpoint.
+
+## Full real-observability validation
+
+Docker is required only for the real-Prometheus evidence path:
 
 ```bash
 mise run full-validation
 ```
 
-## Phase 3: Telemetry & Capacity Intelligence
-
-`telemetry-discovery.yaml` describes how to obtain an arrival-rate time series. Supported adapters:
-
-- `synthetic`: deterministic CI-only evidence;
-- `file`: normalized exported time series (also useful for exported CloudWatch/APM data);
-- `access-log`: NDJSON request logs aggregated into operations/second;
-- `prometheus`: Prometheus-compatible query API, including Grafana Cloud Metrics/Mimir-compatible backends;
-- `datadog`: Datadog metrics timeseries query API.
-
-OpenTelemetry is handled at the storage backend: OTLP/Collector exports data to an observability backend, then the corresponding query adapter reads the historical series.
-
-Discovery writes `workload-profile.json`, `workload-profile.md` and `plan-volume-suggestion.yaml`. The profile includes coverage/confidence, p50/p75/p95/p99/max, busiest UTC hours, volatility, exceptional intervals and recommended baseline/observed peak. Exceptional events are surfaced for human review and are not silently promoted into the normal capacity requirement.
-
-## Phase 4: Post-Test Telemetry Correlation
-
-Every k6 adapter runs through `scripts/run-k6-with-window.mjs`. Besides the existing `summary.json`, it records:
-
-- `timeseries.json`: granular k6 points with timestamps;
-- `test-window.json`: exact UTC start/end, protocol, scenario, target and exit code.
-
-`mise run correlate` reads those artifacts and `telemetry-correlation.yaml`, queries the matching telemetry window and writes:
-
-- `artifacts/correlation/telemetry-correlation.md`
-- `artifacts/correlation/telemetry-correlation.json`
-
-Supported post-test sources:
-
-- `synthetic`: deterministic CI-only correlation evidence;
-- `prometheus`: one range query per configured signal;
-- `datadog`: one timeseries query per configured signal;
-- `file`: exported historical telemetry.
-
-The engine compares pre-test, during-test and post-test behavior; evaluates threshold overlap; computes Pearson correlation with latency/error/iteration rate; searches configured lag buckets; and emits diagnostic hypotheses for roles such as CPU, memory, DB pool/wait, dependency latency, cache hit ratio and autoscaling replicas.
-
-**Correlation is never labelled root cause.** The report always keeps hypotheses separate from causal proof.
-
-## Phase 5: Controlled Experiments & RCA Validation
-
-Phase 5 turns a hypothesis into a paired experiment:
+That path validates:
 
 ```text
-same workload
-    |
-    +--> control -----------+
-    |                       |
-    +--> one-variable treatment
-                            |
-                            v
-              paired deltas + repeated trials
-                            |
-                            v
-        SUPPORTED / CONTRADICTED / INCONCLUSIVE
+k6 observation
+  -> real Prometheus telemetry
+  -> time-aligned correlation
+  -> dependency hypothesis
+  -> separate paired experiment
+  -> evidence-chain alignment
 ```
 
-The local lab exposes controlled knobs for base latency, simulated downstream latency, simulated DB wait, CPU work and error probability. Experiment plans live in `experiments/`.
+Synthetic telemetry cannot satisfy the operational RCA/evidence-chain gate.
 
-Run the default dependency-latency experiment:
+## Controlled experiments
 
-```bash
-mise run experiment
-```
+The built-in experiment runner is intentionally restricted to the repository-owned local lab.
 
-The runner executes at least three paired trials, alternates AB/BA order, keeps workload constant, evaluates both absolute and relative materiality and requires repeated directional consistency. `SUPPORTED` means the controlled intervention repeatedly produced the expected effect **under this lab workload**; it does not mean production causality is proven.
+It supports controlled examples for:
 
-The experiment runner rejects remote targets and arbitrary environment variables. Fault injection is limited to the repository-owned local lab with explicit intensity, VU, iteration and duration ceilings.
+- dependency latency;
+- DB wait;
+- CPU pressure;
+- error probability.
 
-See `docs/15-controlled-experiments.md`.
+The same workload is executed across repeated control/treatment pairs with one changed variable. Results are classified as:
 
-## Phase 6: Real Observability Validation
+- `SUPPORTED`
+- `CONTRADICTED`
+- `INCONCLUSIVE`
 
-Phase 6 removes synthetic telemetry from the RCA-validation path. The CI starts a real Prometheus container, which scrapes the owned Node lab every second. The existing Prometheus `query_range` adapter then correlates those real samples with a dedicated 24-second k6 run.
+`SUPPORTED` means the intervention produced the expected material effect under the tested lab conditions. It does not prove production causality.
 
-The observability run deliberately uses a temporal profile:
+## Evidence saved by CI
 
-```text
-0s              6s                16s                 24s
-| baseline 0 ms | dependency +120 | recovery 0 ms     |
-```
+The GitHub Actions workflow preserves evidence even when the final gate fails, including:
 
-This creates temporal variance inside one exact k6 window. The correlation engine must independently produce a `dependency_latency_ms` hypothesis from Prometheus data; synthetic telemetry cannot satisfy this gate.
-
-After that, the separate Phase 5 paired experiment executes. The evidence-chain gate classifies the relationship as:
-
-- `ALIGNED`: real Prometheus hypothesis matches the technical role independently supported by the experiment;
-- `MISMATCH`: the experiment is supported but the real telemetry hypothesis points elsewhere or is missing;
-- `PARTIAL`: the evidence is incomplete or inconclusive.
-
-Run only the real Prometheus path:
-
-```bash
-mise run observability
-```
-
-Run the complete chain locally:
-
-```bash
-mise run full-validation
-```
-
-Both require Docker. Ordinary smoke/suite commands keep their previous Docker-free behavior.
-
-See `docs/16-real-observability-validation.md`.
-
-## Discovery feeds readiness
-
-```yaml
-volume:
-  discoveryProfile: artifacts/discovery/workload-profile.json
-  discoveryRequired: true
-  discoveryMinimumConfidence: MEDIUM
-```
-
-When loaded, discovered baseline/peak supersede manual fallback values. Non-smoke execution is blocked when a required profile is missing, incompatible, malformed or below the configured confidence floor.
-
-## Correlation configuration
-
-```yaml
-analysis:
-  bucketSeconds: 5
-  minimumMatchedBuckets: 12
-  strongCorrelation: 0.65
-  maxLagBuckets: 6
-
-signals:
-  cpu:
-    role: cpu_utilization
-    unit: ratio
-    threshold: 0.85
-    query: YOUR_PROVIDER_QUERY
-```
-
-The signal `role` drives diagnostic meaning; the provider-specific query stays configurable.
-
-For Prometheus/Datadog, `seriesAggregation` supports `sum|avg|max|min`. This matters when a query returns one series per pod/host.
-
-## Credentials
-
-Telemetry configs store only names of credential env vars, never secret values. Prometheus supports `none`, `bearer` and `basic`; Datadog uses API/application keys from env vars.
-
-The local Phase 6 Prometheus instance uses no credentials because it binds only to the CI/local loopback path and scrapes the repository-owned lab.
-
-## Safe default
-
-PR/push performance scenarios still execute only `smoke`, even if the objective recommends `load`. Manual `workflow_dispatch` can select `auto` after discovery/readiness. Aggressive tests belong only on infrastructure you own or are explicitly authorized to test.
-
-The Phase 5 CI experiment is a separate short local-only validation. Its treatment is intentionally degraded, so its measurement workload does not use performance NFR thresholds; the gate validates experimental integrity and the known expected classification instead.
-
-The Phase 6 observability workload is also local-only. It creates a bounded dependency-latency pulse solely to provide real temporal telemetry for the correlation engine; it never targets a remote system.
-
-A smoke run can collect correlation evidence but may legitimately report that there are too few matched buckets for a statistical claim. Longer baseline/load/stress/soak runs are where temporal diagnosis becomes useful.
-
-## Architecture
-
-```text
-Production telemetry -> Workload discovery -> Workload profile
-                                            |
-                                            v
-Performance plan -> Readiness policy -> Runtime env -> k6
-                                                   |
-                                                   +--> granular k6 time series + exact window
-                                                                  |
-                                                                  v
-Post-test telemetry query -> time alignment -> correlation/lag -> RCA hypotheses
-                                                                  |
-                            +-------------------------------------+
-                            |
-                            v
-                  real Prometheus lab validation
-                            |
-                            v
-                  separate controlled experiment
-                   control / treatment / repeats
-                            |
-                            v
-             ALIGNED / PARTIAL / MISMATCH evidence chain
-                            |
-                            v
-                         CI evidence
-```
-
-The project remains Ports & Adapters + Strategy. Saga remains intentionally out of scope.
-
-## CI evidence
-
-GitHub Actions uploads:
-
-- telemetry discovery profile;
+- workload discovery profile;
 - readiness Markdown/JSON/runtime env;
-- per-protocol `summary.json`, `timeseries.json` and `test-window.json`;
-- synthetic and real-Prometheus post-test correlation Markdown/JSON;
-- performance diagnosis Markdown/JSON;
-- controlled experiment plans, per-trial summaries/logs and experiment report;
-- Prometheus/lab logs and before/after observability configs;
-- observability validation Markdown/JSON;
-- final evidence-chain Markdown/JSON;
-- runner/target evidence.
+- REST/GraphQL/browser k6 summaries;
+- granular k6 time series;
+- exact test windows;
+- synthetic plumbing correlation report;
+- real Prometheus observability/correlation evidence;
+- controlled experiment trials and configs;
+- evidence-chain report;
+- performance diagnosis;
+- environment/runtime evidence.
 
-Failures still leave artifacts explaining why the run failed or was blocked.
+This allows a failed run to be investigated instead of disappearing behind a red CI status.
+
+## Configuration templates
+
+Copy and adapt:
+
+```text
+templates/performance-test-plan.yaml
+templates/telemetry-discovery.yaml
+templates/telemetry-correlation.yaml
+templates/experiment.yaml
+```
+
+Provider credentials stay in environment variables/secrets, never committed YAML.
+
+Supported telemetry paths include:
+
+- Prometheus-compatible backends;
+- Datadog metrics;
+- normalized exported files;
+- access logs for workload discovery;
+- synthetic fixtures for deterministic learning/CI plumbing only.
+
+OpenTelemetry is treated as telemetry transport/instrumentation; historical analysis queries the backend where the telemetry is stored.
+
+## Safety defaults
+
+- PR/push ordinary performance execution = `smoke`.
+- Higher load is explicit.
+- Aggressive tests belong only on infrastructure you own or are explicitly authorized to test.
+- Built-in fault injection cannot target arbitrary remote systems.
+- Secrets stay out of repository configuration.
+- Synthetic telemetry cannot produce operational RCA conclusions.
+- Small smoke samples do not automatically become statistical release gates.
+- Correlation, lag and resource overlap remain diagnostic evidence, not causal proof.
+
+## Project architecture
+
+The implementation follows **Ports & Adapters + Strategy**:
+
+- workload/scenario strategies are independent from protocol adapters;
+- telemetry providers normalize into common time-series evidence;
+- readiness consumes declarative plans/profiles;
+- correlation consumes exact-window k6 + telemetry data;
+- experiment/evidence-chain layers remain separate from observation.
+
+Saga is intentionally out of scope because this repository does not solve a distributed transaction/compensation problem.
+
+## Documentation map
+
+The original numbered technical guides remain useful for deeper study:
+
+- [`docs/01-nfr-discovery.md`](docs/01-nfr-discovery.md)
+- [`docs/02-workload-modeling.md`](docs/02-workload-modeling.md)
+- [`docs/03-scenario-selection.md`](docs/03-scenario-selection.md)
+- [`docs/04-observability-and-environment.md`](docs/04-observability-and-environment.md)
+- [`docs/08-readiness-engine.md`](docs/08-readiness-engine.md)
+- [`docs/09-performance-test-plan.md`](docs/09-performance-test-plan.md)
+- [`docs/10-telemetry-discovery.md`](docs/10-telemetry-discovery.md)
+- [`docs/13-post-test-correlation.md`](docs/13-post-test-correlation.md)
+- [`docs/14-rca-hypotheses.md`](docs/14-rca-hypotheses.md)
+- [`docs/15-controlled-experiments.md`](docs/15-controlled-experiments.md)
+- [`docs/16-real-observability-validation.md`](docs/16-real-observability-validation.md)
+
+For the v1 learning path, start with [Start Here](docs/00-start-here.md) instead of reading every file sequentially.
+
+## Contributing and roadmap
+
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [ROADMAP.md](ROADMAP.md)
+- [CHANGELOG.md](CHANGELOG.md)
+- [v1 Release Guide](docs/21-v1-release-guide.md)
+
+The repository intentionally does not choose a legal license on behalf of its owner. See the release guide before describing it as OSI-licensed open source.

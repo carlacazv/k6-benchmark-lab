@@ -1,0 +1,29 @@
+# Copy to telemetry-discovery.yaml and choose ONE real source adapter.
+version: 1
+unit: iterations_per_second
+
+source:
+  # Options: prometheus | datadog | file | access-log | synthetic
+  # Synthetic is appropriate only for learning/plumbing, not production workload claims.
+  type: prometheus
+  baseUrl: https://prometheus.example.com
+  query: YOUR_ARRIVAL_RATE_PROMQL
+  seriesAggregation: sum
+  auth:
+    mode: bearer
+    tokenEnv: PROMETHEUS_TOKEN
+
+window:
+  # Use a representative period for your business cycle.
+  days: 14
+  stepSeconds: 300
+
+analysis:
+  # Project policy defaults; review these against your context.
+  baselinePercentile: 75
+  peakPercentile: 99
+  minimumCoverageRatio: 0.95
+  minimumSamples: 168
+  eventMadMultiplier: 4
+  minimumEventBuckets: 2
+  busyHoursTop: 5

@@ -74,6 +74,10 @@ run = "bash scripts/run-suite.sh smoke"
 description = "Run the safe smoke path plus real Prometheus observability and evidence-chain validation (requires Docker)"
 run = "RUN_REAL_OBSERVABILITY=1 bash scripts/run-suite.sh smoke"
 
+[tasks.release-qc]
+description = "Validate the v1 public documentation, templates, local links and release version"
+run = "npm run release:qc"
+
 [tasks.test]
-description = "Run analyzer, readiness, telemetry-discovery, correlation, experiment and observability tests"
+description = "Run framework tests plus the v1 release/documentation contract"
 run = "npm test"
