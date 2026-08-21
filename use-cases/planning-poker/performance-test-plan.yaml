@@ -1,0 +1,22 @@
+version: 1
+
+target:
+  name: planning-poker-local
+  baseUrl: http://127.0.0.1:3000
+  authorized: true
+
+objective:
+  type: sanity
+
+# These are provisional local-smoke guardrails, not production SLOs/NFRs.
+# Replace them with agreed criteria before any non-smoke execution.
+nfr:
+  p95Ms: 2000
+  p99Ms: 4000
+  errorRate: 0.01
+  checkRate: 0.99
+  apdexTMs: 1500
+  apdexMin: 0.85
+
+generator:
+  vuSafetyFactor: 1.5
