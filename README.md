@@ -259,3 +259,46 @@ OpenTelemetry is treated as telemetry transport/instrumentation; historical anal
 - Synthetic telemetry cannot produce operational RCA conclusions.
 - Small smoke samples do not automatically become statistical release gates.
 - Correlation, lag and resource overlap remain diagnostic evidence, not causal proof.
+
+## Project architecture
+
+The implementation follows **Ports & Adapters + Strategy**:
+
+- workload/scenario strategies are independent from protocol adapters;
+- telemetry providers normalize into common time-series evidence;
+- readiness consumes declarative plans/profiles;
+- correlation consumes exact-window k6 + telemetry data;
+- experiment/evidence-chain layers remain separate from observation.
+
+Saga is intentionally out of scope because this repository does not solve a distributed transaction/compensation problem.
+
+## Documentation map
+
+The original numbered technical guides remain useful for deeper study:
+
+- [`docs/01-nfr-discovery.md`](docs/01-nfr-discovery.md)
+- [`docs/02-workload-modeling.md`](docs/02-workload-modeling.md)
+- [`docs/03-scenario-selection.md`](docs/03-scenario-selection.md)
+- [`docs/04-observability-and-environment.md`](docs/04-observability-and-environment.md)
+- [`docs/08-readiness-engine.md`](docs/08-readiness-engine.md)
+- [`docs/09-performance-test-plan.md`](docs/09-performance-test-plan.md)
+- [`docs/10-telemetry-discovery.md`](docs/10-telemetry-discovery.md)
+- [`docs/13-post-test-correlation.md`](docs/13-post-test-correlation.md)
+- [`docs/14-rca-hypotheses.md`](docs/14-rca-hypotheses.md)
+- [`docs/15-controlled-experiments.md`](docs/15-controlled-experiments.md)
+- [`docs/16-real-observability-validation.md`](docs/16-real-observability-validation.md)
+
+For the v1 learning path, start with [Start Here](docs/00-start-here.md) instead of reading every file sequentially.
+
+## Contributing and roadmap
+
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [ROADMAP.md](ROADMAP.md)
+- [CHANGELOG.md](CHANGELOG.md)
+- [v1 Release Guide](docs/21-v1-release-guide.md)
+
+## License
+
+Licensed under the **Apache License, Version 2.0** (`Apache-2.0`). See [LICENSE](LICENSE) for the full terms and [NOTICE](NOTICE) for project attribution.
+
+Copyright 2026 Carla Cury Azevedo.
