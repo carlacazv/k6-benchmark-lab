@@ -14,11 +14,17 @@ const PRESETS = {
   load: { rooms: 4, participantsPerRoom: 5, arrivalWindowMs: 10000 },
   stress: { rooms: 10, participantsPerRoom: 5, arrivalWindowMs: 15000 },
   spike: { rooms: 20, participantsPerRoom: 5, arrivalWindowMs: 1000 },
+  'fanout-5': { rooms: 1, participantsPerRoom: 5, arrivalWindowMs: 0 },
+  'fanout-10': { rooms: 1, participantsPerRoom: 10, arrivalWindowMs: 0 },
+  'fanout-20': { rooms: 1, participantsPerRoom: 20, arrivalWindowMs: 0 },
+  'fanout-40': { rooms: 1, participantsPerRoom: 40, arrivalWindowMs: 0 },
 };
 
 const scenario = String(__ENV.PP_SCENARIO || __ENV.SCENARIO || 'baseline').toLowerCase();
 const preset = PRESETS[scenario];
-if (!preset) throw new Error(`Unsupported PP_SCENARIO=${scenario}. Use baseline|load|stress|spike.`);
+if (!preset) {
+  throw new Error(`Unsupported PP_SCENARIO=${scenario}. Use ${Object.keys(PRESETS).join('|')}.`);
+}
 
 const baseUrl = __ENV.TARGET_BASE_URL || 'http://127.0.0.1:3000';
 const socketUrl = toWebSocketUrl(baseUrl);
@@ -42,6 +48,7 @@ const roundSelectAck = new Trend('planning_poker_round_select_ack_ms', true);
 const consensusAck = new Trend('planning_poker_consensus_ack_ms', true);
 const roomStateBytes = new Trend('planning_poker_room_state_bytes', true);
 const roomStateEvents = new Counter('planning_poker_room_state_events');
+const roomStateBytesTotal = new Counter('planning_poker_room_state_bytes_total');
 const eventsSent = new Counter('planning_poker_socket_events_sent');
 const sessionFailures = new Rate('planning_poker_session_failures');
 const ackFailures = new Rate('planning_poker_ack_failures');
@@ -250,9 +257,11 @@ function runParticipant(fixture, positionInRoom) {
           return;
         }
         if (packet.kind === 'event' && packet.event === 'room:state') {
+          const rawSize = String(raw).length;
           const state = packet.payload;
           roomStateEvents.add(1);
-          roomStateBytes.add(String(raw).length);
+          roomStateBytes.add(rawSize);
+          roomStateBytesTotal.add(rawSize);
 
           const story = state?.stories?.find((item) => item.id === fixture.storyId);
           if (story?.estimate !== null && story?.estimate !== undefined) {
