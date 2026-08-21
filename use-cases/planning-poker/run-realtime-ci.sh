@@ -38,20 +38,24 @@ trap cleanup EXIT
 
 scenario_config() {
   case "$1" in
-    baseline) echo "1 5 0" ;;
-    load) echo "4 5 10000" ;;
-    stress) echo "10 5 15000" ;;
-    spike) echo "20 5 1000" ;;
+    baseline) echo "1 5 0 multi-room" ;;
+    load) echo "4 5 10000 multi-room" ;;
+    stress) echo "10 5 15000 multi-room" ;;
+    spike) echo "20 5 1000 multi-room" ;;
+    fanout-5) echo "1 5 0 single-room-fanout" ;;
+    fanout-10) echo "1 10 0 single-room-fanout" ;;
+    fanout-20) echo "1 20 0 single-room-fanout" ;;
+    fanout-40) echo "1 40 0 single-room-fanout" ;;
     *) echo "Unknown Planning Poker scenario: $1" >&2; return 2 ;;
   esac
 }
 
 suite_status=0
 status_file="$ARTIFACT_ROOT/realtime-status.tsv"
-printf 'scenario\trooms\tparticipants_per_room\tvus\tarrival_window_ms\tk6_exit_code\n' > "$status_file"
+printf 'scenario\texperiment\trooms\tparticipants_per_room\tvus\tarrival_window_ms\tk6_exit_code\n' > "$status_file"
 
-for scenario in baseline load stress spike; do
-  read -r rooms participants arrival_window_ms <<<"$(scenario_config "$scenario")"
+for scenario in baseline load stress spike fanout-5 fanout-10 fanout-20 fanout-40; do
+  read -r rooms participants arrival_window_ms experiment <<<"$(scenario_config "$scenario")"
   vus=$((rooms * participants))
   out_dir="$ARTIFACT_ROOT/$scenario"
   container_dir="$out_dir/container"
@@ -59,7 +63,7 @@ for scenario in baseline load stress spike; do
 
   mkdir -p "$container_dir"
   echo
-  echo "=== Planning Poker $scenario: $rooms rooms x $participants participants = $vus VUs ==="
+  echo "=== Planning Poker $scenario [$experiment]: $rooms rooms x $participants participants = $vus VUs ==="
 
   docker run -d \
     --name "$current_container" \
@@ -83,7 +87,7 @@ for scenario in baseline load stress spike; do
     echo "Target did not become ready for $scenario." >&2
     docker logs "$current_container" > "$container_dir/stdout.log" 2>&1 || true
     docker inspect "$current_container" > "$container_dir/inspect.json" 2>/dev/null || true
-    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$scenario" "$rooms" "$participants" "$vus" "$arrival_window_ms" "target-not-ready" >> "$status_file"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$scenario" "$experiment" "$rooms" "$participants" "$vus" "$arrival_window_ms" "target-not-ready" >> "$status_file"
     docker rm -f "$current_container" >/dev/null 2>&1 || true
     current_container=""
     suite_status=1
@@ -109,7 +113,7 @@ for scenario in baseline load stress spike; do
   docker logs "$current_container" > "$container_dir/stdout.log" 2>&1 || true
   docker inspect "$current_container" > "$container_dir/inspect.json" 2>/dev/null || true
 
-  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$scenario" "$rooms" "$participants" "$vus" "$arrival_window_ms" "$k6_exit" >> "$status_file"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$scenario" "$experiment" "$rooms" "$participants" "$vus" "$arrival_window_ms" "$k6_exit" >> "$status_file"
 
   # A performance threshold violation is evidence, not a CI infrastructure failure in this
   # synthetic architecture experiment. Missing reports are handled by the workflow quality gate.
