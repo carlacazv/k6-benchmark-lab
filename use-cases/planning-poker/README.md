@@ -4,7 +4,7 @@ This case study shows how to apply `k6-benchmark-lab` to a real external applica
 
 Target repository: <https://github.com/ljeronimodarocha/planer-poker>
 
-Source inspected for this case: `main@c501fef57a288843546ad9f8355e1a2d0af475bc`.
+Source inspected and executed by CI for this case: `main@c501fef57a288843546ad9f8355e1a2d0af475bc`.
 
 ## 1. What the discovery tells us
 
@@ -64,7 +64,7 @@ This is an architectural risk to investigate, not a conclusion from a performanc
 
 The first executable test deliberately uses `k6/browser` and creates a room through the real UI.
 
-That single flow exercises:
+That flow exercises:
 
 ```text
 static frontend
@@ -93,6 +93,7 @@ Clone the target separately:
 ```bash
 git clone https://github.com/ljeronimodarocha/planer-poker.git
 cd planer-poker
+git checkout c501fef57a288843546ad9f8355e1a2d0af475bc
 npm ci
 DATABASE_URL=file:./dev.db npm run prisma:generate -w server
 DATABASE_URL=file:./dev.db npm run prisma:migrate -w server
@@ -122,7 +123,69 @@ TARGET_BASE_URL=http://127.0.0.1:3000 mise run case-planning-poker-smoke
 
 `k6/browser` needs a Chromium-compatible browser runtime available locally.
 
-## 5. What the smoke test proves
+## 5. Docker execution in GitHub Actions
+
+The repository CI runs this use case in an isolated job named `planning-poker-report`.
+
+The job deliberately does not point k6 at an arbitrary deployed environment. Instead it:
+
+```text
+checkout k6-benchmark-lab
+  -> clone the pinned Planning Poker commit
+  -> start node:26-bookworm Docker container
+  -> npm ci + Prisma generate/migrate + frontend build
+  -> expose Planning Poker only on runner localhost:3000
+  -> wait for /api/health
+  -> execute readiness
+  -> run 5 k6/browser smoke iterations
+  -> export HTML + raw evidence
+  -> upload a dedicated artifact
+  -> remove the container
+```
+
+This makes the example reproducible while keeping the target controlled and disposable.
+
+The Docker container is also captured as evidence through its logs and `docker inspect` metadata.
+
+## 6. Downloadable visual report
+
+Every k6 execution through `scripts/run-k6-with-window.mjs` now exports the built-in k6 web dashboard as a self-contained HTML file.
+
+For Planning Poker, the artifact contains:
+
+```text
+artifacts/use-cases/planning-poker/
+├── readiness/
+│   ├── readiness-report.md
+│   ├── readiness.json
+│   └── runtime.env
+├── browser/
+│   ├── report.html        # open this in a browser
+│   ├── summary.json
+│   ├── timeseries.json
+│   └── test-window.json
+└── container/
+    ├── stdout.log
+    └── inspect.json
+```
+
+In GitHub Actions, download the artifact named:
+
+```text
+planning-poker-performance-<run-id>
+```
+
+Then open:
+
+```text
+browser/report.html
+```
+
+The HTML is the human-facing result. The JSON and time-series files remain the auditable raw evidence used for deeper analysis.
+
+The Actions job summary also prints a compact table with iterations, room-creation p50/p90/p95/p99 and check success rate so the result can be triaged without downloading anything.
+
+## 7. What the smoke test proves
 
 `browser-smoke.js` checks that:
 
@@ -133,15 +196,11 @@ TARGET_BASE_URL=http://127.0.0.1:3000 mise run case-planning-poker-smoke
 - the end-to-end room-creation duration is recorded as `planning_poker_room_create_ms`;
 - Apdex evidence is produced through the same lab helper used by the built-in adapters.
 
-Artifacts are written under:
-
-```text
-artifacts/use-cases/planning-poker/
-```
+The CI uses five iterations to produce a useful short time series while remaining a smoke test rather than a capacity test.
 
 The local plan contains provisional smoke guardrails only. They are explicitly **not production NFRs**.
 
-## 6. What we still need before real load
+## 8. What we still need before real load
 
 Do not jump from this smoke to `100`, `500` or `1000` VUs.
 
@@ -160,7 +219,7 @@ For a defensible load model, collect:
 
 Only after these inputs exist should `performance-test-plan.yaml` be evolved from `sanity` into `baseline`, `load`, `stress`, `spike`, `soak` or `breakpoint`.
 
-## 7. Recommended workload model
+## 9. Recommended workload model
 
 The real-time workload should model **rooms and participants**, not only requests per second.
 
@@ -194,7 +253,7 @@ host creates room
 
 A spike case is particularly relevant for the start of a refinement meeting, where many participants can connect/join within a short interval.
 
-## 8. Telemetry required for diagnosis
+## 10. Telemetry required for diagnosis
 
 Client-side k6 evidence:
 
@@ -221,7 +280,7 @@ Server-side evidence:
 
 The test window must be correlated with these metrics before claiming a bottleneck.
 
-## 9. Hypotheses worth validating later
+## 11. Hypotheses worth validating later
 
 These are investigation hypotheses, not findings:
 
@@ -242,7 +301,7 @@ k6 symptom
   -> supported / contradicted / inconclusive
 ```
 
-## 10. Why this case matters to the lab
+## 12. Why this case matters to the lab
 
 This target exposes an important boundary in the current adapters:
 
