@@ -144,3 +144,117 @@ jobs:
           test '${{ steps.real_observability.outcome }}' = 'success'
           test '${{ steps.experiment.outcome }}' = 'success'
           test '${{ steps.evidence_chain.outcome }}' = 'success'
+
+  planning-poker-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PLANNING_POKER_REPOSITORY: https://github.com/ljeronimodarocha/planer-poker.git
+      PLANNING_POKER_SHA: c501fef57a288843546ad9f8355e1a2d0af475bc
+      TARGET_BASE_URL: http://127.0.0.1:3000
+      SCENARIO: smoke
+      K6_REPORT_DIR: artifacts/use-cases/planning-poker/browser
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install project toolchain with mise
+        uses: jdx/mise-action@v4
+      - name: Ensure k6 browser runtime
+        uses: grafana/setup-k6-action@v1
+        with:
+          k6-version: '2.2.0'
+          browser: true
+      - name: Clone pinned Planning Poker source
+        run: |
+          git clone "$PLANNING_POKER_REPOSITORY" /tmp/planning-poker
+          git -C /tmp/planning-poker checkout --detach "$PLANNING_POKER_SHA"
+          test "$(git -C /tmp/planning-poker rev-parse HEAD)" = "$PLANNING_POKER_SHA"
+      - name: Start Planning Poker in Docker
+        run: |
+          docker run -d --name planning-poker-perf \
+            -p 3000:3000 \
+            -e PORT=3000 \
+            -e HOST=0.0.0.0 \
+            -e LOG_LEVEL=warn \
+            -e DATABASE_URL=file:/tmp/planning-poker.db \
+            -v /tmp/planning-poker:/app \
+            -w /app \
+            node:26-bookworm \
+            bash -lc 'npm ci && npm run prisma:generate -w server && npm run prisma:migrate -w server && npm run build && npm start'
+
+          ready=0
+          for i in {1..120}; do
+            if curl -fsS http://127.0.0.1:3000/api/health >/dev/null; then
+              ready=1
+              break
+            fi
+            if ! docker inspect -f '{{.State.Running}}' planning-poker-perf 2>/dev/null | grep -q true; then
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            docker logs planning-poker-perf || true
+            exit 1
+          fi
+          curl -fsS http://127.0.0.1:3000/api/health
+      - name: Planning Poker readiness
+        id: planning_poker_readiness
+        run: node scripts/readiness.mjs use-cases/planning-poker/performance-test-plan.yaml --scenario smoke --out-dir artifacts/use-cases/planning-poker/readiness
+      - name: Run Planning Poker k6 browser smoke
+        id: planning_poker_smoke
+        env:
+          K6_BROWSER_HEADLESS: 'true'
+          BROWSER_VUS: '1'
+          BROWSER_ITERATIONS: '5'
+          BROWSER_MAX_DURATION: '2m'
+        run: node scripts/run-k6-with-window.mjs use-cases/planning-poker/browser-smoke.js artifacts/use-cases/planning-poker/browser browser
+      - name: Add Planning Poker result to job summary
+        if: always() && hashFiles('artifacts/use-cases/planning-poker/browser/summary.json') != ''
+        run: |
+          node --input-type=module <<'NODE' >> "$GITHUB_STEP_SUMMARY"
+          import fs from 'node:fs';
+          const file = 'artifacts/use-cases/planning-poker/browser/summary.json';
+          const summary = JSON.parse(fs.readFileSync(file, 'utf8'));
+          const metrics = summary.metrics ?? {};
+          const metric = (name, key) => metrics[name]?.values?.[key];
+          const fmt = (value, suffix = '') => Number.isFinite(Number(value)) ? `${Number(value).toFixed(2)}${suffix}` : 'n/a';
+          const checks = metric('checks', 'rate');
+          const room = metrics.planning_poker_room_create_ms?.values ?? {};
+          const iterations = metric('iterations', 'count');
+          console.log('## 🃏 Planning Poker performance smoke');
+          console.log('');
+          console.log('| Metric | Result |');
+          console.log('|---|---:|');
+          console.log(`| Iterations | ${iterations ?? 'n/a'} |`);
+          console.log(`| Room creation p50 | ${fmt(room.med, ' ms')} |`);
+          console.log(`| Room creation p90 | ${fmt(room['p(90)'], ' ms')} |`);
+          console.log(`| Room creation p95 | ${fmt(room['p(95)'], ' ms')} |`);
+          console.log(`| Room creation p99 | ${fmt(room['p(99)'], ' ms')} |`);
+          console.log(`| Checks | ${Number.isFinite(Number(checks)) ? `${(Number(checks) * 100).toFixed(2)}%` : 'n/a'} |`);
+          console.log('');
+          console.log('Download the `planning-poker-performance` artifact and open `browser/report.html` for the full visual k6 report.');
+          NODE
+      - name: Capture Planning Poker container evidence
+        if: always()
+        run: |
+          mkdir -p artifacts/use-cases/planning-poker/container
+          docker logs planning-poker-perf > artifacts/use-cases/planning-poker/container/stdout.log 2>&1 || true
+          docker inspect planning-poker-perf > artifacts/use-cases/planning-poker/container/inspect.json 2>/dev/null || true
+      - name: Upload Planning Poker HTML report and evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: planning-poker-performance-${{ github.run_id }}
+          path: artifacts/use-cases/planning-poker
+          if-no-files-found: error
+      - name: Planning Poker report quality gate
+        if: always()
+        run: |
+          test '${{ steps.planning_poker_readiness.outcome }}' = 'success'
+          test '${{ steps.planning_poker_smoke.outcome }}' = 'success'
+          test -s artifacts/use-cases/planning-poker/browser/report.html
+          test -s artifacts/use-cases/planning-poker/browser/summary.json
+          test -s artifacts/use-cases/planning-poker/browser/timeseries.json
+      - name: Stop Planning Poker container
+        if: always()
+        run: docker rm -f planning-poker-perf >/dev/null 2>&1 || true
