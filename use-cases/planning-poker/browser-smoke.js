@@ -31,7 +31,7 @@ export default async function () {
   let failed = false;
 
   try {
-    const response = await page.goto(env.baseUrl, { waitUntil: 'networkidle' });
+    const response = await page.goto(env.baseUrl, { waitUntil: 'domcontentloaded' });
     const documentOk = check(response?.status() || 0, {
       'planning poker document returned 200': (status) => status === 200,
     });
