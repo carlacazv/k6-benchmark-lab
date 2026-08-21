@@ -4,7 +4,7 @@ This case study shows how to apply `k6-benchmark-lab` to a real external applica
 
 Target repository: <https://github.com/ljeronimodarocha/planer-poker>
 
-Source inspected and executed by CI for this case: `main@c501fef57a288843546ad9f8355e1a2d0af475bc`.
+Source inspected for this case: `main@c501fef57a288843546ad9f8355e1a2d0af475bc`.
 
 ## 1. What the discovery tells us
 
@@ -64,7 +64,7 @@ This is an architectural risk to investigate, not a conclusion from a performanc
 
 The first executable test deliberately uses `k6/browser` and creates a room through the real UI.
 
-That flow exercises:
+That single flow exercises:
 
 ```text
 static frontend
@@ -93,7 +93,6 @@ Clone the target separately:
 ```bash
 git clone https://github.com/ljeronimodarocha/planer-poker.git
 cd planer-poker
-git checkout c501fef57a288843546ad9f8355e1a2d0af475bc
 npm ci
 DATABASE_URL=file:./dev.db npm run prisma:generate -w server
 DATABASE_URL=file:./dev.db npm run prisma:migrate -w server
@@ -123,67 +122,44 @@ TARGET_BASE_URL=http://127.0.0.1:3000 mise run case-planning-poker-smoke
 
 `k6/browser` needs a Chromium-compatible browser runtime available locally.
 
-## 5. Docker execution in GitHub Actions
+## 5. Downloadable HTML report
 
-The repository CI runs this use case in an isolated job named `planning-poker-report`.
-
-The job deliberately does not point k6 at an arbitrary deployed environment. Instead it:
+Every k6 execution through `scripts/run-k6-with-window.mjs` enables the built-in k6 Web Dashboard in export-only mode. The output directory contains:
 
 ```text
-checkout k6-benchmark-lab
-  -> clone the pinned Planning Poker commit
-  -> start node:26-bookworm Docker container
-  -> npm ci + Prisma generate/migrate + frontend build
-  -> expose Planning Poker only on runner localhost:3000
-  -> wait for /api/health
-  -> execute readiness
-  -> run 5 k6/browser smoke iterations
-  -> export HTML + raw evidence
-  -> upload a dedicated artifact
-  -> remove the container
+report.html       # self-contained human-facing visual report
+summary.json      # aggregate machine-readable metrics
+timeseries.json   # granular metric points
+test-window.json  # exact execution window and metadata
 ```
 
-This makes the example reproducible while keeping the target controlled and disposable.
-
-The Docker container is also captured as evidence through its logs and `docker inspect` metadata.
-
-## 6. Downloadable visual report
-
-Every k6 execution through `scripts/run-k6-with-window.mjs` now exports the built-in k6 web dashboard as a self-contained HTML file.
-
-For Planning Poker, the artifact contains:
+For this use case:
 
 ```text
-artifacts/use-cases/planning-poker/
-├── readiness/
-│   ├── readiness-report.md
-│   ├── readiness.json
-│   └── runtime.env
-├── browser/
-│   ├── report.html        # open this in a browser
-│   ├── summary.json
-│   ├── timeseries.json
-│   └── test-window.json
-└── container/
-    ├── stdout.log
-    └── inspect.json
+artifacts/use-cases/planning-poker/browser/report.html
 ```
 
-In GitHub Actions, download the artifact named:
+Open `report.html` directly in a browser; it does not require a running Grafana instance.
+
+The GitHub Actions job `planning-poker-report` runs the inspected Planning Poker source in a disposable Docker container on runner localhost, executes five browser-smoke iterations and uploads a separate artifact named:
 
 ```text
 planning-poker-performance-<run-id>
 ```
 
-Then open:
+The same artifact preserves readiness evidence, raw k6 data and Docker logs/inspect output.
+
+## 6. Re-run CI from a pull request comment
+
+After `.github/workflows/ci-comment.yml` is present on the repository default branch, an authorized contributor can comment:
 
 ```text
-browser/report.html
+#ci
 ```
 
-The HTML is the human-facing result. The JSON and time-series files remain the auditable raw evidence used for deeper analysis.
+on a pull request. The dispatcher resolves that pull request's own head branch and triggers `performance.yml` on that branch with the `smoke` scenario.
 
-The Actions job summary also prints a compact table with iterations, room-creation p50/p90/p95/p99 and check success rate so the result can be triaged without downloading anything.
+For safety, comment-triggered dispatch is restricted to `OWNER`, `MEMBER` or `COLLABORATOR` comments and to pull-request branches that live in this repository. Fork heads are rejected by the dispatcher.
 
 ## 7. What the smoke test proves
 
@@ -196,7 +172,11 @@ The Actions job summary also prints a compact table with iterations, room-creati
 - the end-to-end room-creation duration is recorded as `planning_poker_room_create_ms`;
 - Apdex evidence is produced through the same lab helper used by the built-in adapters.
 
-The CI uses five iterations to produce a useful short time series while remaining a smoke test rather than a capacity test.
+Artifacts are written under:
+
+```text
+artifacts/use-cases/planning-poker/
+```
 
 The local plan contains provisional smoke guardrails only. They are explicitly **not production NFRs**.
 
