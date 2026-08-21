@@ -50,6 +50,22 @@ run = "node scripts/readiness.mjs use-cases/planning-poker/performance-test-plan
 description = "Run the Planning Poker end-to-end k6/browser smoke against an authorized local target"
 run = "K6_BROWSER_HEADLESS=true K6_REPORT_DIR=artifacts/use-cases/planning-poker/browser node scripts/run-k6-with-window.mjs use-cases/planning-poker/browser-smoke.js artifacts/use-cases/planning-poker/browser browser"
 
+[tasks.case-planning-poker-baseline]
+description = "Run the controlled Planning Poker Socket.IO baseline: 1 room x 5 participants = 5 VUs"
+run = "PP_SCENARIO=baseline SCENARIO=baseline ROOMS=1 PARTICIPANTS_PER_ROOM=5 ARRIVAL_WINDOW_MS=0 K6_REPORT_DIR=artifacts/use-cases/planning-poker/baseline node scripts/run-k6-with-window.mjs use-cases/planning-poker/socketio-workload.js artifacts/use-cases/planning-poker/baseline socketio"
+
+[tasks.case-planning-poker-load]
+description = "Run the controlled Planning Poker Socket.IO load: 4 rooms x 5 participants = 20 VUs"
+run = "PP_SCENARIO=load SCENARIO=load ROOMS=4 PARTICIPANTS_PER_ROOM=5 ARRIVAL_WINDOW_MS=10000 K6_REPORT_DIR=artifacts/use-cases/planning-poker/load node scripts/run-k6-with-window.mjs use-cases/planning-poker/socketio-workload.js artifacts/use-cases/planning-poker/load socketio"
+
+[tasks.case-planning-poker-stress]
+description = "Run the controlled Planning Poker Socket.IO stress: 10 rooms x 5 participants = 50 VUs"
+run = "PP_SCENARIO=stress SCENARIO=stress ROOMS=10 PARTICIPANTS_PER_ROOM=5 ARRIVAL_WINDOW_MS=15000 K6_REPORT_DIR=artifacts/use-cases/planning-poker/stress node scripts/run-k6-with-window.mjs use-cases/planning-poker/socketio-workload.js artifacts/use-cases/planning-poker/stress socketio"
+
+[tasks.case-planning-poker-spike]
+description = "Run the controlled Planning Poker Socket.IO spike: 20 rooms x 5 participants = 100 VUs"
+run = "PP_SCENARIO=spike SCENARIO=spike ROOMS=20 PARTICIPANTS_PER_ROOM=5 ARRIVAL_WINDOW_MS=1000 K6_REPORT_DIR=artifacts/use-cases/planning-poker/spike node scripts/run-k6-with-window.mjs use-cases/planning-poker/socketio-workload.js artifacts/use-cases/planning-poker/spike socketio"
+
 [tasks.correlate]
 description = "Correlate exact k6 test windows with application/infrastructure telemetry"
 run = "node scripts/correlate.mjs ${TELEMETRY_CORRELATION_CONFIG} --artifacts artifacts --out-dir artifacts/correlation"
