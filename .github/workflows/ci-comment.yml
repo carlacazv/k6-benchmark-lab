@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Resolve pull request head
+      - name: Resolve pull request head and CI scope
         id: pr
         env:
           GH_TOKEN: ${{ github.token }}
@@ -41,8 +41,15 @@ jobs:
             exit 1
           fi
 
+          changed_files="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[].filename')"
+          realtime=false
+          if grep -Eq '^(use-cases/planning-poker/|scripts/run-k6-with-window\.mjs$|mise\.toml$|package\.json$|\.github/workflows/planning-poker-realtime\.yml$)' <<<"$changed_files"; then
+            realtime=true
+          fi
+
           echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
           echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+          echo "realtime=$realtime" >> "$GITHUB_OUTPUT"
 
       - name: Dispatch performance pipeline on PR branch
         env:
@@ -55,18 +62,34 @@ jobs:
             --ref "$HEAD_REF" \
             -f scenario=smoke
 
+      - name: Dispatch Planning Poker realtime matrix when relevant
+        if: steps.pr.outputs.realtime == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ steps.pr.outputs.head_ref }}
+        run: |
+          set -euo pipefail
+          gh workflow run planning-poker-realtime.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$HEAD_REF"
+
       - name: Record dispatch
         env:
           HEAD_REF: ${{ steps.pr.outputs.head_ref }}
           HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+          REALTIME: ${{ steps.pr.outputs.realtime }}
           PR_NUMBER: ${{ github.event.issue.number }}
         run: |
           {
             echo '## #ci dispatch'
             echo
             echo "Triggered \`performance.yml\` for PR #${PR_NUMBER}."
+            if [ "$REALTIME" = "true" ]; then
+              echo 'Planning Poker-related changes detected: also triggered `planning-poker-realtime.yml` (5 / 20 / 50 / 100 VUs).'
+            fi
             echo
             echo "- Branch: \`${HEAD_REF}\`"
             echo "- Head SHA: \`${HEAD_SHA}\`"
-            echo '- Scenario: `smoke`'
+            echo '- Main scenario: `smoke`'
+            echo "- Planning Poker realtime: \`${REALTIME}\`"
           } >> "$GITHUB_STEP_SUMMARY"

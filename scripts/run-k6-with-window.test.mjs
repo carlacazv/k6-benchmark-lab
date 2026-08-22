@@ -21,6 +21,10 @@ done
 file="\${out#json=}"
 mkdir -p "$(dirname "$file")"
 echo '{"type":"Point","data":{"time":"2026-08-18T12:00:00Z","value":1,"tags":{}},"metric":"iterations"}' > "$file"
+if [[ -n "\${K6_WEB_DASHBOARD_EXPORT:-}" ]]; then
+  mkdir -p "$(dirname "$K6_WEB_DASHBOARD_EXPORT")"
+  echo '<!doctype html><title>fake k6 report</title>' > "$K6_WEB_DASHBOARD_EXPORT"
+fi
 exit 0
 `);
 fs.chmodSync(fakeK6, 0o755);
@@ -35,4 +39,6 @@ const window = JSON.parse(fs.readFileSync(path.join(out, 'test-window.json'), 'u
 if (window.protocol !== 'rest' || window.scenario !== 'load' || window.target !== 'http://target.example') throw new Error(`Unexpected window metadata: ${JSON.stringify(window)}`);
 if (!window.startedAt || !window.endedAt || window.exitCode !== 0) throw new Error('Window timestamps/exit code missing.');
 if (!fs.existsSync(path.join(out, 'timeseries.json'))) throw new Error('Granular k6 output was not preserved.');
+if (!fs.existsSync(path.join(out, 'report.html'))) throw new Error('Downloadable HTML report was not generated.');
+if (window.htmlReport !== path.join(out, 'report.html')) throw new Error(`HTML report metadata missing: ${JSON.stringify(window)}`);
 console.log('k6 window wrapper tests passed');

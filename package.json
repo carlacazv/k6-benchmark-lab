@@ -23,6 +23,7 @@
     "test:correlation": "node scripts/run-k6-with-window.test.mjs && node scripts/correlate.test.mjs",
     "test:experiment": "node scripts/experiment.test.mjs",
     "test:observability": "node lab-app/schedule.test.mjs && node lab-app/metrics.test.mjs && node scripts/lib/evidence-chain.test.mjs",
-    "test": "npm run test:analyzer && npm run test:readiness && npm run test:discovery && npm run test:correlation && npm run test:experiment && npm run test:observability && npm run release:qc"
+    "test:planning-poker": "node use-cases/planning-poker/socketio-protocol.test.mjs && node --check use-cases/planning-poker/socketio-workload.js && node --check use-cases/planning-poker/browser-smoke.js",
+    "test": "npm run test:analyzer && npm run test:readiness && npm run test:discovery && npm run test:correlation && npm run test:experiment && npm run test:observability && npm run test:planning-poker && npm run release:qc"
   }
 }

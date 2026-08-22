@@ -17,6 +17,7 @@ Then use:
 - **[QA Performance Engineering Playbook](docs/17-qa-performance-playbook.md)** — the end-to-end reasoning process;
 - **[Scenario Decision Tree](docs/18-scenario-decision-tree.md)** — smoke vs baseline vs load vs stress vs spike vs soak vs breakpoint;
 - **[End-to-End Walkthrough](docs/19-end-to-end-walkthrough.md)** — one complete worked workflow;
+- **[Planning Poker real-target case](use-cases/planning-poker/README.md)** — apply the model to a Fastify + Socket.IO + SQLite application;
 - **[Troubleshooting](docs/20-troubleshooting.md)** — diagnose the framework without weakening evidence gates;
 - **[`templates/`](templates/)** — copy-ready performance plan, telemetry and experiment configuration.
 

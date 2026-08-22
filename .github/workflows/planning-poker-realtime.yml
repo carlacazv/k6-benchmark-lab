@@ -1,0 +1,69 @@
+name: planning-poker-realtime
+
+on:
+  pull_request:
+    paths:
+      - 'use-cases/planning-poker/**'
+      - 'scripts/run-k6-with-window.mjs'
+      - 'mise.toml'
+      - 'package.json'
+      - '.github/workflows/planning-poker-realtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  realtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PLANNING_POKER_REPOSITORY: https://github.com/ljeronimodarocha/planer-poker.git
+      PLANNING_POKER_SHA: c501fef57a288843546ad9f8355e1a2d0af475bc
+      TARGET_BASE_URL: http://127.0.0.1:3000
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install pinned toolchain with mise
+        uses: jdx/mise-action@v4
+
+      - name: Clone pinned Planning Poker source
+        run: |
+          git clone "$PLANNING_POKER_REPOSITORY" /tmp/planning-poker
+          git -C /tmp/planning-poker checkout --detach "$PLANNING_POKER_SHA"
+          test "$(git -C /tmp/planning-poker rev-parse HEAD)" = "$PLANNING_POKER_SHA"
+          mkdir -p artifacts/use-cases/planning-poker
+          git -C /tmp/planning-poker rev-parse HEAD > artifacts/use-cases/planning-poker/target-commit.txt
+
+      - name: Run Socket.IO multi-room and single-room fanout matrices
+        id: realtime
+        run: bash use-cases/planning-poker/run-realtime-ci.sh /tmp/planning-poker
+
+      - name: Add realtime comparison to job summary
+        if: always()
+        run: |
+          node use-cases/planning-poker/render-realtime-comparison.mjs artifacts/use-cases/planning-poker \
+            | tee artifacts/use-cases/planning-poker/realtime-comparison.md \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload realtime HTML reports and evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: planning-poker-realtime-${{ github.run_id }}
+          path: artifacts/use-cases/planning-poker
+          if-no-files-found: error
+
+      - name: Realtime report quality gate
+        if: always()
+        run: |
+          test '${{ steps.realtime.outcome }}' = 'success'
+          test -s artifacts/use-cases/planning-poker/realtime-status.tsv
+          for scenario in baseline load stress spike fanout-5 fanout-10 fanout-20 fanout-40; do
+            test -s "artifacts/use-cases/planning-poker/$scenario/report.html"
+            test -s "artifacts/use-cases/planning-poker/$scenario/summary.json"
+            test -s "artifacts/use-cases/planning-poker/$scenario/timeseries.json"
+            test -s "artifacts/use-cases/planning-poker/$scenario/test-window.json"
+            test -s "artifacts/use-cases/planning-poker/$scenario/container/stdout.log"
+            test -s "artifacts/use-cases/planning-poker/$scenario/container/inspect.json"
+          done
